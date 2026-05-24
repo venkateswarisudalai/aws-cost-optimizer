@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aws-cost-optimizer"
+version = "0.1.0"
+description = "Find wasted AWS spend in 60 seconds. Your credentials never leave your laptop."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Venkateswari Sudalai" }]
+keywords = ["aws", "cost", "finops", "cloud", "optimization"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "boto3>=1.34",
+    "botocore>=1.34",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "click>=8.1",
+    "rich>=13.7",
+    "python-dateutil>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "pytest-asyncio>=0.23",
+    "moto>=5.0",
+    "ruff>=0.3",
+    "mypy>=1.9",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+awsco = "awsco.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/venkateswarisudalai/aws-cost-optimizer"
+Issues = "https://github.com/venkateswarisudalai/aws-cost-optimizer/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["awsco*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
