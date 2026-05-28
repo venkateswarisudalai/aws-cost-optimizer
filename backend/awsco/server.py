@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from awsco import __version__
 from awsco.aws import (
     InlineCredentials,
+    account_regions,
     caller_identity,
     enabled_regions,
     list_profiles,
@@ -75,6 +76,21 @@ async def lifespan(app: FastAPI):
         if existing is None or not existing.is_demo:
             save_scan(build_demo_scan())
     yield
+
+
+def _demo_regions() -> list[dict[str, object]]:
+    """A representative slice of the real catalog for demo mode: a few enabled
+    regions plus a couple of not-activated opt-in regions."""
+    enabled = ["us-east-1", "us-east-2", "us-west-2", "eu-west-1", "ap-southeast-2"]
+    not_opted = ["ap-east-1", "me-south-1", "af-south-1"]
+    rows = [
+        {"name": r, "opt_in_status": "opt-in-not-required", "enabled": True}
+        for r in enabled
+    ] + [
+        {"name": r, "opt_in_status": "not-opted-in", "enabled": False}
+        for r in not_opted
+    ]
+    return sorted(rows, key=lambda x: str(x["name"]))
 
 
 def _dev_origins() -> list[str]:
@@ -142,9 +158,9 @@ def create_app() -> FastAPI:
     @app.get("/aws/regions")
     def aws_regions(profile: str | None = Query(default=None)):
         if AppState.demo_mode:
-            return {"regions": ["us-east-1", "us-west-2", "eu-west-1"], "demo": True}
+            return {"regions": _demo_regions(), "demo": True}
         try:
-            return {"regions": enabled_regions(profile=profile), "demo": False}
+            return {"regions": account_regions(profile=profile), "demo": False}
         except Exception as exc:
             log.warning("Could not list regions for profile=%s: %s", profile, exc)
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -157,13 +173,13 @@ def create_app() -> FastAPI:
             return {
                 "account_id": "123456789012",
                 "arn": "arn:aws:iam::123456789012:user/demo",
-                "regions": ["us-east-1", "us-west-2", "eu-west-1"],
+                "regions": _demo_regions(),
                 "demo": True,
             }
         credentials = req.credentials.as_inline() if req.credentials else None
         try:
             ident = caller_identity(profile=req.profile, credentials=credentials)
-            regions = enabled_regions(profile=req.profile, credentials=credentials)
+            regions = account_regions(profile=req.profile, credentials=credentials)
         except Exception as exc:
             log.warning("connection validation failed: %s", type(exc).__name__)
             raise HTTPException(

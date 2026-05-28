@@ -36,9 +36,15 @@ export interface AwsCredentials {
   session_token?: string | null;
 }
 
+export interface RegionInfo {
+  name: string;
+  opt_in_status: string;
+  enabled: boolean;
+}
+
 export interface ValidateResult {
   account_id: string;
   arn: string;
-  regions: string[];
+  regions: RegionInfo[];
   demo: boolean;
 }

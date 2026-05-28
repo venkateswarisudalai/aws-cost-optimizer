@@ -88,16 +88,48 @@ def caller_identity(
     }
 
 
+# OptInStatus values that mean the region is usable (and therefore scannable).
+SCANNABLE_OPT_IN = {"opt-in-not-required", "opted-in"}
+
+
+def account_regions(
+    profile: str | None = None,
+    credentials: InlineCredentials | None = None,
+) -> list[dict[str, object]]:
+    """Return every region in the account's partition with its opt-in status.
+
+    Includes regions that aren't activated on this account (OptInStatus
+    'not-opted-in'); those are marked enabled=False so the UI can show them
+    but not scan them — calling APIs there would just raise OptInRequired.
+    Note: GovCloud / China are separate partitions and won't appear here.
+    """
+    ec2 = session(
+        profile=profile, region="us-east-1", credentials=credentials
+    ).client("ec2", config=DEFAULT_BOTO_CONFIG)
+    resp = ec2.describe_regions(AllRegions=True)
+    out: list[dict[str, object]] = []
+    for r in resp["Regions"]:
+        status = r.get("OptInStatus", "")
+        out.append(
+            {
+                "name": r["RegionName"],
+                "opt_in_status": status,
+                "enabled": status in SCANNABLE_OPT_IN,
+            }
+        )
+    return sorted(out, key=lambda x: str(x["name"]))
+
+
 def enabled_regions(
     profile: str | None = None,
     credentials: InlineCredentials | None = None,
 ) -> list[str]:
-    """Return list of regions enabled (opted-in) for this account."""
-    ec2 = session(
-        profile=profile, region="us-east-1", credentials=credentials
-    ).client("ec2", config=DEFAULT_BOTO_CONFIG)
-    resp = ec2.describe_regions(AllRegions=False)  # only opted-in
-    return sorted(r["RegionName"] for r in resp["Regions"])
+    """Region names that are activated for this account (scannable)."""
+    return [
+        str(r["name"])
+        for r in account_regions(profile=profile, credentials=credentials)
+        if r["enabled"]
+    ]
 
 
 def list_profiles() -> list[str]:

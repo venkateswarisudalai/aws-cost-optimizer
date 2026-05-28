@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { listProfiles, validateConnection } from "../lib/api";
-import type { AwsCredentials } from "../lib/types";
+import type { AwsCredentials, RegionInfo } from "../lib/types";
 
 export interface ConnectSelection {
   mode: "profile" | "keys";
@@ -51,7 +51,7 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
   // validation result + region selection
   const [accountId, setAccountId] = useState<string | null>(null);
   const [arn, setArn] = useState<string | null>(null);
-  const [regions, setRegions] = useState<string[]>([]);
+  const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [regionFilter, setRegionFilter] = useState("");
 
@@ -109,9 +109,11 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
       setAccountId(res.account_id);
       setArn(res.arn);
       setRegions(res.regions);
-      // Preselect everything (or restore prior selection if it still applies).
-      const prior = initial?.regions?.filter((r) => res.regions.includes(r)) ?? [];
-      setSelected(new Set(prior.length ? prior : res.regions));
+      // Only activated regions are scannable. Preselect those (or restore the
+      // prior selection if it still applies to this account).
+      const enabledNames = res.regions.filter((r) => r.enabled).map((r) => r.name);
+      const prior = initial?.regions?.filter((n) => enabledNames.includes(n)) ?? [];
+      setSelected(new Set(prior.length ? prior : enabledNames));
       setStep("regions");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -120,9 +122,15 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
     }
   }
 
+  const enabledCount = useMemo(
+    () => regions.filter((r) => r.enabled).length,
+    [regions],
+  );
   const filteredRegions = useMemo(
     () =>
-      regions.filter((r) => r.toLowerCase().includes(regionFilter.toLowerCase())),
+      regions.filter((r) =>
+        r.name.toLowerCase().includes(regionFilter.toLowerCase()),
+      ),
     [regions, regionFilter],
   );
 
@@ -311,14 +319,20 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                 <Label>
                   Regions{" "}
                   <span className="font-normal normal-case text-gray-500">
-                    ({selected.size}/{regions.length} selected)
+                    ({selected.size}/{enabledCount} enabled selected)
                   </span>
                 </Label>
                 <div className="flex gap-2 text-xs">
                   <button
                     className="text-emerald-400 hover:text-emerald-300 disabled:opacity-40"
-                    onClick={() => setSelected(new Set(regions))}
-                    disabled={regions.length === 0}
+                    onClick={() =>
+                      setSelected(
+                        new Set(
+                          regions.filter((r) => r.enabled).map((r) => r.name),
+                        ),
+                      )
+                    }
+                    disabled={enabledCount === 0}
                   >
                     Select all
                   </button>
@@ -350,11 +364,28 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                     </div>
                   ) : (
                     filteredRegions.map((r) => {
-                      const checked = selected.has(r);
+                      if (!r.enabled) {
+                        return (
+                          <div
+                            key={r.name}
+                            title="Not activated on this account — enable it in the AWS console to scan it"
+                            className="flex cursor-not-allowed items-center gap-2 rounded-md px-2.5 py-1.5 text-sm opacity-50"
+                          >
+                            <span className="h-4 w-4 shrink-0 rounded border border-gray-700 border-dashed" />
+                            <code className="truncate text-xs text-gray-500">
+                              {r.name}
+                            </code>
+                            <span className="ml-auto text-[10px] uppercase tracking-wide text-gray-600">
+                              off
+                            </span>
+                          </div>
+                        );
+                      }
+                      const checked = selected.has(r.name);
                       return (
                         <button
-                          key={r}
-                          onClick={() => toggle(r)}
+                          key={r.name}
+                          onClick={() => toggle(r.name)}
                           className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition ${
                             checked
                               ? "bg-emerald-500/10 text-gray-100"
@@ -362,7 +393,7 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                           }`}
                         >
                           <span
-                            className={`flex h-4 w-4 items-center justify-center rounded border ${
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                               checked
                                 ? "border-emerald-500 bg-emerald-500"
                                 : "border-gray-600"
@@ -370,7 +401,7 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                           >
                             {checked && <Check size={11} className="text-white" />}
                           </span>
-                          <code className="text-xs">{r}</code>
+                          <code className="text-xs">{r.name}</code>
                         </button>
                       );
                     })
@@ -379,7 +410,14 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
               </div>
               <Hint>
                 ⏱ Scanning {selected.size} region{selected.size === 1 ? "" : "s"}{" "}
-                takes ~{Math.max(10, selected.size * 4)}s.
+                takes ~{Math.max(10, selected.size * 4)}s.{" "}
+                {regions.length > enabledCount && (
+                  <>
+                    {regions.length - enabledCount} region
+                    {regions.length - enabledCount === 1 ? "" : "s"} not activated
+                    on this account (shown as <span className="text-gray-400">off</span>).
+                  </>
+                )}
               </Hint>
             </div>
 
