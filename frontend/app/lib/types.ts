@@ -29,3 +29,16 @@ export interface ScanResult {
   errors: { collector: string; region: string; error: string }[];
   is_demo: boolean;
 }
+
+export interface AwsCredentials {
+  access_key_id: string;
+  secret_access_key: string;
+  session_token?: string | null;
+}
+
+export interface ValidateResult {
+  account_id: string;
+  arn: string;
+  regions: string[];
+  demo: boolean;
+}

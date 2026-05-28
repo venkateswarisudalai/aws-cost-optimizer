@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,18 +11,52 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from awsco import __version__
+from awsco.aws import (
+    InlineCredentials,
+    caller_identity,
+    enabled_regions,
+    list_profiles,
+)
 from awsco.demo.fixtures import build_demo_scan
 from awsco.models import ScanResult
 from awsco.scanner import run_scan
 from awsco.storage import (
-    DEFAULT_DB_PATH,
     get_scan,
     latest_scan,
     list_scans,
     save_scan,
 )
+
+
+class AwsCredentials(BaseModel):
+    access_key_id: str = Field(min_length=16)
+    secret_access_key: str = Field(min_length=1)
+    session_token: str | None = None
+
+    def as_inline(self) -> InlineCredentials:
+        return {
+            "access_key_id": self.access_key_id.strip(),
+            "secret_access_key": self.secret_access_key.strip(),
+            "session_token": (self.session_token or "").strip() or None,
+        }
+
+
+class ScanRequest(BaseModel):
+    profile: str | None = None
+    regions: list[str] | None = None
+    credentials: AwsCredentials | None = None
+
+
+class ConnectRequest(BaseModel):
+    """Validate a connection before scanning: either a local profile or
+    pasted access keys."""
+
+    profile: str | None = None
+    credentials: AwsCredentials | None = None
+
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +77,22 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _dev_origins() -> list[str]:
+    """Origins allowed in dev. The Next.js dev server runs on :3001 by default
+    (see frontend/package.json); :3000 is the bundled-Docker port. An extra
+    origin can be supplied via AWSCO_CORS_ORIGIN."""
+    origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+    extra = os.environ.get("AWSCO_CORS_ORIGIN")
+    if extra:
+        origins.append(extra)
+    return origins
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="aws-cost-optimizer",
@@ -49,11 +100,11 @@ def create_app() -> FastAPI:
         description="Local-first AWS waste finder.",
         lifespan=lifespan,
     )
-    # Dev frontend runs on :3000 (Next.js). In Docker we serve the built
-    # frontend from the same origin, so CORS becomes a no-op anyway.
+    # In Docker we serve the built frontend from the same origin, so CORS is a
+    # no-op there. These origins matter only for `npm run dev`.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_origins=_dev_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -63,13 +114,16 @@ def create_app() -> FastAPI:
         return {"ok": True, "version": __version__, "demo": AppState.demo_mode}
 
     @app.post("/scan")
-    def scan() -> ScanResult:
+    def scan(req: ScanRequest | None = None) -> ScanResult:
         if AppState.demo_mode:
             result = build_demo_scan()
         else:
+            profile = (req.profile if req else None) or AppState.profile
+            regions = (req.regions if req else None) or AppState.regions
+            credentials = req.credentials.as_inline() if (req and req.credentials) else None
             try:
                 result = run_scan(
-                    profile=AppState.profile, regions=AppState.regions
+                    profile=profile, regions=regions, credentials=credentials
                 )
             except Exception as exc:
                 log.exception("scan failed")
@@ -78,6 +132,50 @@ def create_app() -> FastAPI:
                 ) from exc
         save_scan(result)
         return result
+
+    @app.get("/aws/profiles")
+    def aws_profiles():
+        if AppState.demo_mode:
+            return {"profiles": ["demo"], "demo": True}
+        return {"profiles": list_profiles(), "demo": False}
+
+    @app.get("/aws/regions")
+    def aws_regions(profile: str | None = Query(default=None)):
+        if AppState.demo_mode:
+            return {"regions": ["us-east-1", "us-west-2", "eu-west-1"], "demo": True}
+        try:
+            return {"regions": enabled_regions(profile=profile), "demo": False}
+        except Exception as exc:
+            log.warning("Could not list regions for profile=%s: %s", profile, exc)
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/aws/validate")
+    def aws_validate(req: ConnectRequest):
+        """Verify a connection works and return the account identity + the
+        regions enabled for it. Used by the Connect dialog before scanning."""
+        if AppState.demo_mode:
+            return {
+                "account_id": "123456789012",
+                "arn": "arn:aws:iam::123456789012:user/demo",
+                "regions": ["us-east-1", "us-west-2", "eu-west-1"],
+                "demo": True,
+            }
+        credentials = req.credentials.as_inline() if req.credentials else None
+        try:
+            ident = caller_identity(profile=req.profile, credentials=credentials)
+            regions = enabled_regions(profile=req.profile, credentials=credentials)
+        except Exception as exc:
+            log.warning("connection validation failed: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not connect to AWS: {exc}",
+            ) from exc
+        return {
+            "account_id": ident["account_id"],
+            "arn": ident["arn"],
+            "regions": regions,
+            "demo": False,
+        }
 
     @app.get("/scans")
     def scans(limit: int = Query(default=50, le=200)):

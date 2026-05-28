@@ -1,20 +1,6 @@
 "use client";
 
-import {
-  Card,
-  Select,
-  SelectItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-  Text,
-  TextInput,
-  Title,
-} from "@tremor/react";
-import { AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, ListChecks, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Finding, ScanResult } from "../lib/types";
 import { CopyButton } from "./CopyButton";
@@ -29,14 +15,17 @@ function fmtMoney(n: number): string {
   });
 }
 
+const selectCls =
+  "rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20";
+
 export function FindingsTable({ scan }: { scan: ScanResult }) {
-  const [severity, setSeverity] = useState<string>("all");
-  const [region, setRegion] = useState<string>("all");
+  const [severity, setSeverity] = useState("all");
+  const [region, setRegion] = useState("all");
   const [q, setQ] = useState("");
 
   const allRegions = useMemo(
     () => Array.from(new Set(scan.findings.map((f) => f.region))).sort(),
-    [scan]
+    [scan],
   );
 
   const filtered = useMemo(() => {
@@ -55,104 +44,118 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
   }, [scan, severity, region, q]);
 
   return (
-    <Card>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-        <div>
-          <Title>Findings</Title>
-          <Text className="text-xs">
-            Sorted by monthly savings. Click "Copy fix" to grab the `aws` CLI
-            command.
-          </Text>
+    <section className="rounded-2xl border border-white/10 bg-white/[0.02]">
+      <div className="flex flex-col gap-3 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2">
+          <ListChecks size={16} className="text-gray-400" />
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight text-white">
+              Findings
+            </h2>
+            <p className="text-xs text-gray-500">
+              Sorted by monthly savings · {filtered.length} shown
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <TextInput
-            icon={Search}
-            placeholder="Search title, check, resource…"
-            value={q}
-            onValueChange={setQ}
-            className="w-60"
-          />
-          <Select
+        <div className="flex flex-wrap gap-2">
+          <div className="relative">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+            />
+            <input
+              className="w-52 rounded-lg border border-white/10 bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-gray-100 placeholder-gray-600 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
+              placeholder="Search findings…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <select
+            className={selectCls}
             value={severity}
-            onValueChange={setSeverity}
-            className="w-32"
+            onChange={(e) => setSeverity(e.target.value)}
           >
-            <SelectItem value="all">All severities</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </Select>
-          <Select value={region} onValueChange={setRegion} className="w-36">
-            <SelectItem value="all">All regions</SelectItem>
+            <option value="all">All severities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select
+            className={selectCls}
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+          >
+            <option value="all">All regions</option>
             {allRegions.map((r) => (
-              <SelectItem key={r} value={r}>
+              <option key={r} value={r}>
                 {r}
-              </SelectItem>
+              </option>
             ))}
-          </Select>
+          </select>
         </div>
       </div>
 
-      <Table className="mt-2">
-        <TableHead>
-          <TableRow>
-            <TableHeaderCell>Sev</TableHeaderCell>
-            <TableHeaderCell className="text-right">$ / mo</TableHeaderCell>
-            <TableHeaderCell>Finding</TableHeaderCell>
-            <TableHeaderCell>Region</TableHeaderCell>
-            <TableHeaderCell>Check</TableHeaderCell>
-            <TableHeaderCell>Fix</TableHeaderCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {filtered.map((f) => (
-            <FindingRow key={f.id} f={f} />
-          ))}
-          {filtered.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6}>
-                <Text className="text-center py-4">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-gray-500">
+              <th className="px-5 py-3 font-medium">Sev</th>
+              <th className="px-3 py-3 text-right font-medium">$ / mo</th>
+              <th className="px-3 py-3 font-medium">Finding</th>
+              <th className="px-3 py-3 font-medium">Region</th>
+              <th className="px-3 py-3 font-medium">Fix</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {filtered.map((f) => (
+              <FindingRow key={f.id} f={f} />
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
                   No findings match the current filters.
-                </Text>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Card>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
 function FindingRow({ f }: { f: Finding }) {
   return (
-    <TableRow>
-      <TableCell>
+    <tr className="group transition-colors hover:bg-white/[0.025]">
+      <td className="px-5 py-3 align-top">
         <SeverityBadge severity={f.severity} />
-      </TableCell>
-      <TableCell className="text-right font-medium text-emerald-400">
+      </td>
+      <td className="whitespace-nowrap px-3 py-3 text-right align-top font-medium tabular-nums text-emerald-400">
         {fmtMoney(f.monthly_savings_usd)}
-      </TableCell>
-      <TableCell>
+      </td>
+      <td className="px-3 py-3 align-top">
         <div className="flex flex-col">
-          <span className="font-medium">{f.title}</span>
-          <span className="text-xs text-gray-500 truncate max-w-md">
+          <span className="font-medium text-gray-100">{f.title}</span>
+          <span className="mt-0.5 max-w-md truncate text-xs text-gray-500">
             {f.description}
+          </span>
+          <span className="mt-1 font-mono text-[11px] text-gray-600">
+            {f.check_id}
           </span>
           {f.fix_destructive && (
             <span className="mt-1 inline-flex items-center gap-1 text-xs text-amber-400">
-              <AlertTriangle size={10} />
+              <AlertTriangle size={11} />
               Fix deletes data — verify before running
             </span>
           )}
         </div>
-      </TableCell>
-      <TableCell className="font-mono text-xs">{f.region}</TableCell>
-      <TableCell className="font-mono text-xs text-gray-400">
-        {f.check_id}
-      </TableCell>
-      <TableCell>
+      </td>
+      <td className="whitespace-nowrap px-3 py-3 align-top font-mono text-xs text-gray-400">
+        {f.region}
+      </td>
+      <td className="px-3 py-3 align-top">
         <CopyButton text={f.cli_fix_command} />
-      </TableCell>
-    </TableRow>
+      </td>
+    </tr>
   );
 }

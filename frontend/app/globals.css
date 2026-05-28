@@ -8,14 +8,60 @@ body {
   color: #e5e7eb;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient background glow — subtle emerald/blue wash anchored at the top. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 30rem at 15% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+    radial-gradient(50rem 28rem at 95% -5%, rgba(37, 99, 235, 0.10), transparent 55%);
+}
+
+/* Keep real content above the glow layer. */
+header,
+main {
+  position: relative;
+  z-index: 1;
 }
 
 ::selection {
-  background: #1e3a8a;
+  background: #065f46;
   color: #fff;
 }
 
-/* Tremor table tweaks for dark mode density */
+/* tabular numerals for money columns */
 table {
   font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars in dark surfaces */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

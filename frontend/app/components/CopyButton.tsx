@@ -16,17 +16,21 @@ export function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-300 hover:border-gray-600 hover:bg-gray-700 transition-colors"
       title={text}
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+        copied
+          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+          : "border-white/10 bg-white/[0.03] text-gray-300 hover:border-white/20 hover:bg-white/[0.07]"
+      }`}
     >
       {copied ? (
         <>
-          <Check size={12} className="text-emerald-400" />
+          <Check size={13} />
           Copied
         </>
       ) : (
         <>
-          <Copy size={12} />
+          <Copy size={13} />
           Copy fix
         </>
       )}
