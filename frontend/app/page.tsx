@@ -3,6 +3,7 @@
 import { AlertCircle, Plug, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ConnectModal, type ConnectSelection } from "./components/ConnectModal";
+import { DemoBanner } from "./components/DemoBanner";
 import { EmptyState } from "./components/EmptyState";
 import { FindingsTable } from "./components/FindingsTable";
 import { Header } from "./components/Header";
@@ -198,6 +199,7 @@ export default function Dashboard() {
           <ConnectPrompt onConnect={() => setModalOpen(true)} />
         ) : showDashboard ? (
           <>
+            {isDemo && <DemoBanner />}
             {availableRegions.length > 0 && (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">

@@ -1,9 +1,14 @@
+import { demoRegions, demoScan } from "./demoData";
 import type {
   AwsCredentials,
   RegionInfo,
   ScanResult,
   ValidateResult,
 } from "./types";
+
+// Hosted showcase build: serve bundled sample data with no backend. Real
+// (local) builds leave this unset and talk to the awsco server as usual.
+const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -28,6 +33,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function latestScan(): Promise<ScanResult | null> {
+  if (DEMO) return demoScan();
   try {
     return await request<ScanResult>("/scans/latest");
   } catch (err) {
@@ -44,6 +50,7 @@ export async function runScan(opts?: {
   regions?: string[] | null;
   credentials?: AwsCredentials | null;
 }): Promise<ScanResult> {
+  if (DEMO) return demoScan(opts?.regions ?? null);
   const body: Record<string, unknown> = {};
   if (opts?.profile) body.profile = opts.profile;
   if (opts?.regions?.length) body.regions = opts.regions;
@@ -59,10 +66,12 @@ export async function healthz(): Promise<{
   version: string;
   demo: boolean;
 }> {
+  if (DEMO) return { ok: true, version: "demo", demo: true };
   return request("/healthz");
 }
 
 export async function listProfiles(): Promise<{ profiles: string[]; demo: boolean }> {
+  if (DEMO) return { profiles: ["demo"], demo: true };
   return request("/aws/profiles");
 }
 
@@ -71,6 +80,7 @@ export async function listProfiles(): Promise<{ profiles: string[]; demo: boolea
 export async function listRegions(
   profile?: string | null,
 ): Promise<{ regions: RegionInfo[]; demo: boolean }> {
+  if (DEMO) return { regions: demoRegions, demo: true };
   const qs = profile ? `?profile=${encodeURIComponent(profile)}` : "";
   return request(`/aws/regions${qs}`);
 }
@@ -80,6 +90,14 @@ export async function validateConnection(input: {
   profile?: string | null;
   credentials?: AwsCredentials | null;
 }): Promise<ValidateResult> {
+  if (DEMO) {
+    return {
+      account_id: "123456789012",
+      arn: "arn:aws:iam::123456789012:user/demo",
+      regions: demoRegions,
+      demo: true,
+    };
+  }
   const body: Record<string, unknown> = {};
   if (input.profile) body.profile = input.profile;
   if (input.credentials) body.credentials = input.credentials;

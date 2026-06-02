@@ -16,36 +16,37 @@
 | AWS-specific deep checks | ✅ | ✅ | partial (multi-cloud) |
 | Copy-paste fix commands | ✅ | ❌ | ❌ |
 | Cost | free | $$$ | free |
-| Setup time | 1 `docker run` | onboarding call | install + config |
+| Setup time | 1 `pip install` | onboarding call | install + config |
 
 ## Quick start
 
-### Option 1: Docker (recommended)
+### Option 1: One command (CLI) — recommended
+
+Installs straight from this repo, so `awsco` lands on your PATH. Use `pipx` for an
+isolated install (or swap in `pip`):
 
 ```bash
-docker run --rm -p 3000:3000 \
-  -v ~/.aws:/root/.aws:ro \
-  -e AWS_PROFILE=default \
-  ghcr.io/venkateswarisudalai/aws-cost-optimizer:latest
+pipx install "git+https://github.com/venkateswarisudalai/aws-cost-optimizer.git#subdirectory=backend"
 ```
 
-Open <http://localhost:3000>.
-
-### Option 2: pipx
+Then:
 
 ```bash
-pipx install aws-cost-optimizer
-awsco serve            # launches the dashboard at :3000
-awsco scan             # one-shot CLI scan, prints findings as a table
-awsco scan --json      # JSON output for piping
+awsco scan --demo-data   # see sample findings — no AWS account needed
+awsco scan               # scan your real account (read-only)
+awsco scan --json        # JSON output for piping
 ```
 
-### Option 3: try it with no AWS account
+### Option 2: Dashboard (clone + run)
+
+The web dashboard is bundled with the repo:
 
 ```bash
-docker run --rm -p 3000:3000 \
-  ghcr.io/venkateswarisudalai/aws-cost-optimizer:latest \
-  --demo-data
+git clone https://github.com/venkateswarisudalai/aws-cost-optimizer
+cd aws-cost-optimizer/backend
+pip install -e .
+awsco serve              # dashboard at http://localhost:3000
+                         # add --demo-data to explore without an AWS account
 ```
 
 ## What it finds (v1)
@@ -79,7 +80,7 @@ Attach it to an IAM user or role, then point `AWS_PROFILE` at it.
 - **No outbound network calls** except to AWS API endpoints. Run with `--audit-mode` to log every network request.
 - **No telemetry.** Ever. Not even anonymized counters.
 - **Credentials are read from your local `~/.aws/credentials` or env vars.** Never written, never transmitted anywhere except AWS.
-- **The Docker image is built from this repo with reproducible builds via GitHub Actions** — verify the SHA matches.
+- **Install from source.** You install with `pipx install "git+…"` or by cloning — so you can read every line before it ever touches your account.
 
 ## Development
 
@@ -103,6 +104,7 @@ cd frontend && npm install && npm run dev
 - v1.3 — Multi-account org scanning
 - v1.4 — Anomaly detection
 - v2.0 — Savings Plans / RI recommendations
+- Packaging — published PyPI release + a one-line Docker image (in progress)
 
 ## Contributing
 
