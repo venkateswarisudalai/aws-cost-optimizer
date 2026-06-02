@@ -79,9 +79,14 @@ async def lifespan(app: FastAPI):
 
 
 def _demo_regions() -> list[dict[str, object]]:
-    """A representative slice of the real catalog for demo mode: a few enabled
-    regions plus a couple of not-activated opt-in regions."""
-    enabled = ["us-east-1", "us-east-2", "us-west-2", "eu-west-1", "ap-southeast-2"]
+    """A representative slice of the real catalog for demo mode: the common
+    enabled regions plus a couple of not-activated opt-in regions."""
+    enabled = [
+        "us-east-1", "us-east-2", "us-west-1", "us-west-2",
+        "eu-west-1", "eu-west-2", "eu-central-1",
+        "ap-south-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1",
+        "ca-central-1", "sa-east-1",
+    ]
     not_opted = ["ap-east-1", "me-south-1", "af-south-1"]
     rows = [
         {"name": r, "opt_in_status": "opt-in-not-required", "enabled": True}
@@ -133,6 +138,15 @@ def create_app() -> FastAPI:
     def scan(req: ScanRequest | None = None) -> ScanResult:
         if AppState.demo_mode:
             result = build_demo_scan()
+            # Honour a region filter so the dashboard's per-region switcher
+            # behaves the same in demo mode as against a real account.
+            requested = req.regions if req else None
+            if requested:
+                wanted = set(requested)
+                result.findings = [f for f in result.findings if f.region in wanted]
+                result.regions_scanned = [
+                    r for r in result.regions_scanned if r in wanted
+                ]
         else:
             profile = (req.profile if req else None) or AppState.profile
             regions = (req.regions if req else None) or AppState.regions

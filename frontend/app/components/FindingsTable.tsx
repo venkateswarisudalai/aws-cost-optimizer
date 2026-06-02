@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, ListChecks, Search } from "lucide-react";
+import { AlertTriangle, Clock, ListChecks, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { idleHint } from "../lib/findingHints";
 import type { Finding, ScanResult } from "../lib/types";
 import { CopyButton } from "./CopyButton";
 import { SeverityBadge } from "./SeverityBadge";
@@ -103,6 +104,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
               <th className="px-3 py-3 text-right font-medium">$ / mo</th>
               <th className="px-3 py-3 font-medium">Finding</th>
               <th className="px-3 py-3 font-medium">Region</th>
+              <th className="px-3 py-3 font-medium">Idle / last used</th>
               <th className="px-3 py-3 font-medium">Fix</th>
             </tr>
           </thead>
@@ -112,7 +114,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
+                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">
                   No findings match the current filters.
                 </td>
               </tr>
@@ -153,9 +155,23 @@ function FindingRow({ f }: { f: Finding }) {
       <td className="whitespace-nowrap px-3 py-3 align-top font-mono text-xs text-gray-400">
         {f.region}
       </td>
+      <td className="whitespace-nowrap px-3 py-3 align-top">
+        <IdleCell f={f} />
+      </td>
       <td className="px-3 py-3 align-top">
         <CopyButton text={f.cli_fix_command} />
       </td>
     </tr>
+  );
+}
+
+function IdleCell({ f }: { f: Finding }) {
+  const hint = idleHint(f);
+  if (!hint) return <span className="text-xs text-gray-600">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] text-gray-300">
+      <Clock size={11} className="text-gray-500" />
+      {hint}
+    </span>
   );
 }

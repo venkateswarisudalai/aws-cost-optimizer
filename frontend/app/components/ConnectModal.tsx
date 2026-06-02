@@ -19,7 +19,8 @@ export interface ConnectSelection {
   mode: "profile" | "keys";
   profile: string | null;
   credentials: AwsCredentials | null; // in-memory only — never persisted
-  regions: string[];
+  regions: string[]; // the subset chosen for the initial scan
+  enabledRegions: string[]; // every region activated on the account (switcher universe)
   accountId: string | null;
   arn?: string | null;
 }
@@ -148,6 +149,7 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
       profile: mode === "profile" ? profile : null,
       credentials: mode === "keys" ? credentials : null,
       regions: Array.from(selected),
+      enabledRegions: regions.filter((r) => r.enabled).map((r) => r.name),
       accountId,
       arn,
     });

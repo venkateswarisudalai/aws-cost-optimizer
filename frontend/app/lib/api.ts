@@ -1,4 +1,9 @@
-import type { AwsCredentials, ScanResult, ValidateResult } from "./types";
+import type {
+  AwsCredentials,
+  RegionInfo,
+  ScanResult,
+  ValidateResult,
+} from "./types";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -59,6 +64,15 @@ export async function healthz(): Promise<{
 
 export async function listProfiles(): Promise<{ profiles: string[]; demo: boolean }> {
   return request("/aws/profiles");
+}
+
+/** Full region catalog for the account (or the demo catalog), independent of
+ *  any scan. Used to populate the dashboard's region switcher. */
+export async function listRegions(
+  profile?: string | null,
+): Promise<{ regions: RegionInfo[]; demo: boolean }> {
+  const qs = profile ? `?profile=${encodeURIComponent(profile)}` : "";
+  return request(`/aws/regions${qs}`);
 }
 
 /** Verify a connection (profile OR pasted keys) and get account id + regions. */

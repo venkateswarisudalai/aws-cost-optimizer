@@ -49,7 +49,10 @@ def build_demo_scan() -> ScanResult:
             "ec2", "us-east-1", "nat-0a1b2c3d4e5f6",
             32.40, Confidence.HIGH,
             "aws ec2 delete-nat-gateway --region us-east-1 --nat-gateway-id nat-0a1b2c3d4e5f6",
-            False, {"bytes_out_7d": 0, "vpc_id": "vpc-aaa", "subnet_id": "subnet-bbb"},
+            False, {
+                "bytes_out_7d": 0, "vpc_id": "vpc-aaa", "subnet_id": "subnet-bbb",
+                "create_time": (now - timedelta(days=63)).isoformat(),
+            },
         ),
         _f(
             "nat.idle", "Idle NAT gateway nat-99887766",
@@ -73,7 +76,10 @@ def build_demo_scan() -> ScanResult:
             "ec2", "us-east-1", "vol-0abc1234",
             50.00, Confidence.HIGH,
             "aws ec2 delete-volume --region us-east-1 --volume-id vol-0abc1234",
-            True, {"size_gb": 500, "volume_type": "gp2", "availability_zone": "us-east-1a"},
+            True, {
+                "size_gb": 500, "volume_type": "gp2", "availability_zone": "us-east-1a",
+                "create_time": (now - timedelta(days=129)).isoformat(),
+            },
         ),
         _f(
             "ebs.unattached", "Unattached EBS volume vol-0def5678 (100 GB, gp3)",
@@ -81,7 +87,10 @@ def build_demo_scan() -> ScanResult:
             "ec2", "us-west-2", "vol-0def5678",
             8.00, Confidence.HIGH,
             "aws ec2 delete-volume --region us-west-2 --volume-id vol-0def5678",
-            True, {"size_gb": 100, "volume_type": "gp3"},
+            True, {
+                "size_gb": 100, "volume_type": "gp3",
+                "create_time": (now - timedelta(days=21)).isoformat(),
+            },
         ),
         _f(
             "ec2.stopped-billed-ebs",

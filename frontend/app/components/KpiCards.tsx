@@ -20,12 +20,23 @@ function fmtAge(iso: string | null): string {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
-export function KpiCards({ scan }: { scan: ScanResult }) {
+export function KpiCards({
+  scan,
+  selectedRegion = "all",
+}: {
+  scan: ScanResult;
+  selectedRegion?: string;
+}) {
   const totalSavings = scan.findings.reduce(
     (acc, f) => acc + f.monthly_savings_usd,
     0,
   );
   const high = scan.findings.filter((f) => f.severity === "high").length;
+
+  const isAll = selectedRegion === "all";
+  const scopeLabel = isAll
+    ? `account-wide · ${scan.regions_scanned.length} region${scan.regions_scanned.length === 1 ? "" : "s"}`
+    : `in ${selectedRegion}`;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
@@ -35,7 +46,10 @@ export function KpiCards({ scan }: { scan: ScanResult }) {
         <div className="relative">
           <div className="flex items-center gap-2 text-sm text-emerald-300/80">
             <Wallet size={16} />
-            Monthly waste found
+            {isAll ? "Total monthly savings" : "Monthly savings"}
+            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300/90">
+              {scopeLabel}
+            </span>
           </div>
           <div className="mt-2 text-5xl font-semibold tracking-tight text-emerald-400">
             {fmtMoney(totalSavings)}
