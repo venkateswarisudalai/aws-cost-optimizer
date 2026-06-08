@@ -57,8 +57,13 @@ awsco serve              # dashboard at http://localhost:3000
 | Unused Elastic IPs | $3.65/mo each | High |
 | EBS snapshots older than 90 days | $0.05/GB/mo each | Medium |
 | Idle NAT gateways (no traffic 7d) | $32.40/mo each | High |
+| Idle EC2 instances (running, <5% CPU 7d) | full instance cost | Medium |
 | Stopped EC2 still paying for EBS | varies | High |
 | Idle RDS (no connections 7d) | $12–$200+/mo each | Medium |
+| Old manual RDS snapshots (>90 days) | $0.095/GB/mo each | Medium |
+| Idle Redshift clusters (no connections 7d) | $180+/mo each | Medium |
+| Idle ElastiCache clusters (<2% CPU 7d) | $12–$300+/mo each | Medium |
+| Idle provisioned DynamoDB tables (~0 usage 7d) | reserved RCU/WCU cost | Medium |
 | Unused ALB/NLB (no targets or 0 reqs) | ~$16/mo each | High |
 | gp2 volumes that should be gp3 | 20% on EBS storage | High |
 | CloudWatch Log groups without retention | grows unbounded | High |

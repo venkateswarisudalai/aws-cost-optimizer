@@ -9,14 +9,19 @@ Collectors must:
 
 from awsco.collectors import (
     cloudwatch_logs_no_retention,
+    dynamodb_idle,
     ebs_gp2_to_gp3,
     ebs_snapshots_old,
     ebs_unattached,
+    ec2_idle,
     ec2_stopped_billed_ebs,
     eip_unused,
+    elasticache_idle,
     lb_unused,
     nat_idle,
     rds_idle,
+    rds_snapshots_old,
+    redshift_idle,
 )
 
 ALL_COLLECTORS = [
@@ -24,9 +29,14 @@ ALL_COLLECTORS = [
     eip_unused,
     ebs_snapshots_old,
     nat_idle,
+    ec2_idle,
     ec2_stopped_billed_ebs,
     rds_idle,
+    rds_snapshots_old,
     lb_unused,
     ebs_gp2_to_gp3,
     cloudwatch_logs_no_retention,
+    dynamodb_idle,
+    elasticache_idle,
+    redshift_idle,
 ]

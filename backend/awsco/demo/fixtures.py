@@ -168,6 +168,48 @@ def build_demo_scan() -> ScanResult:
             "aws logs put-retention-policy --region us-west-2 --log-group-name '/aws/ecs/legacy-cluster' --retention-in-days 30",
             False, {"stored_bytes": 257698037760, "stored_gb": 240.0},
         ),
+        _f(
+            "ec2.idle", "Idle EC2 'analytics-box' (m5.2xlarge), max 1.8% CPU over 7d",
+            "Running m5.2xlarge peaked at 1.8% CPU over 7 days.",
+            "ec2", "us-east-1", "i-0idleanalytics01",
+            276.48, Confidence.MEDIUM,
+            "aws ec2 stop-instances --region us-east-1 --instance-ids i-0idleanalytics01",
+            False, {"instance_type": "m5.2xlarge", "max_cpu_pct_7d": 1.8},
+        ),
+        _f(
+            "redshift.idle", "Idle Redshift cluster bi-warehouse (2× dc2.large)",
+            "Redshift cluster had 0 connections over 7 days.",
+            "redshift", "us-east-1", "bi-warehouse",
+            360.00, Confidence.MEDIUM,
+            "aws redshift pause-cluster --region us-east-1 --cluster-identifier bi-warehouse",
+            False, {"node_type": "dc2.large", "number_of_nodes": 2, "max_connections_7d": 0},
+        ),
+        _f(
+            "elasticache.idle", "Idle ElastiCache cluster sessions-cache (1× cache.r5.large)",
+            "Cache cluster peaked at 0.4% CPU over 7 days.",
+            "elasticache", "us-west-2", "sessions-cache",
+            155.52, Confidence.MEDIUM,
+            "aws elasticache delete-cache-cluster --region us-west-2 --cache-cluster-id sessions-cache",
+            True, {"node_type": "cache.r5.large", "num_nodes": 1, "engine": "redis", "max_cpu_pct_7d": 0.4},
+        ),
+        _f(
+            "dynamodb.idle-provisioned",
+            "Idle provisioned DynamoDB table 'events-archive' (200 RCU / 200 WCU)",
+            "Provisioned table consumed ~0 capacity over 7 days.",
+            "dynamodb", "us-east-1", "events-archive",
+            112.32, Confidence.MEDIUM,
+            "aws dynamodb update-table --region us-east-1 --table-name events-archive --billing-mode PAY_PER_REQUEST",
+            False, {"billing_mode": "PROVISIONED", "read_capacity_units": 200, "write_capacity_units": 200, "consumed_units_7d": 12},
+        ),
+        _f(
+            "rds.snapshot-old",
+            "Old manual RDS snapshot prod-db-pre-migration (288d old, 400 GB)",
+            "Manual DB snapshot is 288 days old and still billing.",
+            "rds", "us-east-1", "prod-db-pre-migration",
+            38.00, Confidence.MEDIUM,
+            "aws rds delete-db-snapshot --region us-east-1 --db-snapshot-identifier prod-db-pre-migration",
+            True, {"size_gb": 400, "age_days": 288, "engine": "postgres", "source_db": "prod-db"},
+        ),
     ]
 
     return ScanResult(
