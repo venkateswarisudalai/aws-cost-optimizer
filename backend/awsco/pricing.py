@@ -33,7 +33,20 @@ LB_MONTHLY = ALB_HOURLY * 24 * 30  # ~$16.20
 CLOUDWATCH_LOGS_INGEST_GB = 0.50
 CLOUDWATCH_LOGS_STORAGE_GB_MONTH = 0.03
 
+# RDS manual snapshot / backup storage beyond the free tier ($/GB-month).
+RDS_SNAPSHOT_GB_MONTH = 0.095
+
+# DynamoDB provisioned capacity ($/hour per unit, us-east-1).
+DYNAMODB_RCU_HOURLY = 0.00013
+DYNAMODB_WCU_HOURLY = 0.00065
+
 HOURS_PER_MONTH = 24 * 30
+
+
+def dynamodb_provisioned_monthly_cost(rcu: int, wcu: int) -> float:
+    """Monthly cost of provisioned read/write capacity units."""
+    hourly = rcu * DYNAMODB_RCU_HOURLY + wcu * DYNAMODB_WCU_HOURLY
+    return round(hourly * HOURS_PER_MONTH, 2)
 
 
 def ebs_volume_monthly_cost(volume_type: str, size_gb: int) -> float:

@@ -53,6 +53,26 @@ export function idleHint(f: Finding): string | null {
     }
     case "ebs.gp2-to-gp3":
       return "gp2 → gp3";
+    case "ec2.idle": {
+      const c = num("max_cpu_pct_7d");
+      return c != null ? `${c}% CPU · 7d` : "idle · 7d";
+    }
+    case "elasticache.idle": {
+      const c = num("max_cpu_pct_7d");
+      return c != null ? `${c}% CPU · 7d` : "idle · 7d";
+    }
+    case "redshift.idle": {
+      const c = num("max_connections_7d");
+      return c != null ? `${c} conn${c === 1 ? "" : "s"} · 7d` : "idle · 7d";
+    }
+    case "dynamodb.idle-provisioned": {
+      const u = num("consumed_units_7d");
+      return u != null ? `${u} units · 7d` : "idle · 7d";
+    }
+    case "rds.snapshot-old": {
+      const d = num("age_days") ?? daysSince(e.create_time);
+      return d != null ? `${d}d old` : "old snapshot";
+    }
     default: {
       const d = daysSince(e.create_time ?? e.created_time ?? e.start_time);
       return d != null ? `${d}d` : null;
