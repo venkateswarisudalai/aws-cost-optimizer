@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from awsco.models import Confidence, Finding, ScanResult, Severity
+from awsco.models import Category, Confidence, Finding, ScanResult, Severity
 
 
 def _f(
@@ -20,6 +20,7 @@ def _f(
     cli: str,
     destructive: bool,
     evidence: dict,
+    category: Category = Category.WASTE,
 ) -> Finding:
     arn = f"arn:aws:{service}:{region}:123456789012:demo/{resource_id}"
     return Finding(
@@ -32,6 +33,7 @@ def _f(
         resource_arn=arn,
         resource_id=resource_id,
         monthly_savings_usd=monthly,
+        category=category,
         severity=Severity.from_monthly_usd(monthly),
         confidence=confidence,
         cli_fix_command=cli,
@@ -209,6 +211,72 @@ def build_demo_scan() -> ScanResult:
             38.00, Confidence.MEDIUM,
             "aws rds delete-db-snapshot --region us-east-1 --db-snapshot-identifier prod-db-pre-migration",
             True, {"size_gb": 400, "age_days": 288, "engine": "postgres", "source_db": "prod-db"},
+        ),
+        # --- FinOps recommendations -------------------------------------------
+        _f(
+            "ec2.rightsizing",
+            "Rightsize EC2 'api-worker-3': m5.2xlarge → m5.large (saves ~$207.36/mo)",
+            "Compute Optimizer flags this instance as over-provisioned; m5.large "
+            "covers the real load.",
+            "ec2", "us-east-1", "i-0rightsize0001",
+            207.36, Confidence.MEDIUM,
+            "aws ec2 stop-instances --region us-east-1 --instance-ids i-0rightsize0001 && "
+            "aws ec2 modify-instance-attribute --region us-east-1 --instance-id i-0rightsize0001 --instance-type m5.large && "
+            "aws ec2 start-instances --region us-east-1 --instance-ids i-0rightsize0001",
+            False, {
+                "current_instance_type": "m5.2xlarge", "recommended_instance_type": "m5.large",
+                "finding": "OVER_PROVISIONED", "performance_risk": 1.0,
+                "estimated_monthly_savings_usd": 207.36, "source": "compute-optimizer",
+            },
+            category=Category.RIGHTSIZING,
+        ),
+        _f(
+            "ce.savings-plan",
+            "Buy a Compute Savings Plan (~$3.20/hr commit) — saves ~$842.00/mo",
+            "Cost Explorer projects ~28% savings on steady compute usage from a "
+            "1-year no-upfront Compute Savings Plan.",
+            "compute", "global", "COMPUTE_SP",
+            842.00, Confidence.MEDIUM,
+            "# Review, then purchase in the console: "
+            "https://console.aws.amazon.com/cost-management/home#/savings-plans/recommendations",
+            False, {
+                "plan_type": "COMPUTE_SP", "hourly_commitment_usd": "3.20",
+                "estimated_savings_percentage": 28, "term": "1yr",
+                "payment_option": "NO_UPFRONT", "source": "cost-explorer",
+            },
+            category=Category.COMMITMENT,
+        ),
+        _f(
+            "ce.ri-recommendation",
+            "Buy 4× RDS Reserved Instance (db.r5.large) — saves ~$318.00/mo",
+            "Cost Explorer recommends 1-year no-upfront RDS RIs based on the last "
+            "30 days of steady on-demand usage.",
+            "rds", "us-east-1", "ri-rds-db.r5.large",
+            318.00, Confidence.MEDIUM,
+            "# Review, then purchase in the console: "
+            "https://console.aws.amazon.com/cost-management/home#/ri/recommendations",
+            False, {
+                "service": "RDS", "instance_type": "db.r5.large", "recommended_count": 4,
+                "term": "1yr", "payment_option": "NO_UPFRONT", "source": "cost-explorer",
+            },
+            category=Category.COMMITMENT,
+        ),
+        _f(
+            "ce.anomaly",
+            "Cost anomaly: AmazonS3 +$1,240.00 (2026-05-31)",
+            "AWS Cost Anomaly Detection flagged unexpected S3 spend ~$1,240 above "
+            "forecast — likely a runaway export job. One-off impact, not a saving.",
+            "amazons3", "global", "anomaly-0001",
+            0.00, Confidence.HIGH,
+            "# Investigate in the console: "
+            "https://console.aws.amazon.com/cost-management/home#/anomaly-detection/monitors",
+            False, {
+                "impact_usd": 1240.00, "impact_percentage": 380,
+                "expected_spend_usd": 326.0, "actual_spend_usd": 1566.0,
+                "anomaly_start": "2026-05-31", "root_cause_service": "AmazonS3",
+                "source": "cost-anomaly-detection",
+            },
+            category=Category.ANOMALY,
         ),
     ]
 

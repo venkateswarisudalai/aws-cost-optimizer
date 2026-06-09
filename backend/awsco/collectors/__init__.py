@@ -8,7 +8,11 @@ Collectors must:
 """
 
 from awsco.collectors import (
+    ce_anomalies,
+    ce_ri_recommendations,
+    ce_savings_plans,
     cloudwatch_logs_no_retention,
+    compute_optimizer_rightsizing,
     dynamodb_idle,
     ebs_gp2_to_gp3,
     ebs_snapshots_old,
@@ -39,4 +43,9 @@ ALL_COLLECTORS = [
     dynamodb_idle,
     elasticache_idle,
     redshift_idle,
+    # FinOps recommendations (rightsizing / commitments / anomalies)
+    compute_optimizer_rightsizing,
+    ce_ri_recommendations,
+    ce_savings_plans,
+    ce_anomalies,
 ]
