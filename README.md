@@ -68,6 +68,29 @@ awsco serve              # dashboard at http://localhost:3000
 | gp2 volumes that should be gp3 | 20% on EBS storage | High |
 | CloudWatch Log groups without retention | grows unbounded | High |
 
+### FinOps recommendations (v1.1+)
+
+Beyond idle/orphan waste, `awsco` now pulls the same recommendations a FinOps
+team lives in — straight from AWS, surfaced next to the waste so the whole
+picture is in one dashboard. Each finding carries a **category** so you can
+filter:
+
+| Check | Category | Source | What it does |
+|---|---|---|---|
+| EC2 rightsizing | `rightsizing` | Compute Optimizer | Over-provisioned instances + the cheaper type that still fits the load |
+| Reserved Instance recommendations | `commitment` | Cost Explorer | RI purchases that would discount steady EC2/RDS/ElastiCache/Redshift/OpenSearch usage |
+| Savings Plans recommendations | `commitment` | Cost Explorer | The hourly Compute/EC2 Savings Plan commitment that maximises discount |
+| Cost anomalies | `anomaly` | Cost Anomaly Detection | Unexpected spend spikes by service (one-off impact, tracked separately from savings) |
+
+Notes:
+- These are **account-wide** (the Cost Explorer endpoint is global), so they run
+  once per scan, not per region.
+- They need the services switched on: enroll in **Compute Optimizer**, and have
+  at least one **Cost Anomaly Monitor** configured. If a service isn't enabled,
+  that check simply returns nothing — no errors.
+- Anomalies are *impacts*, not recurring savings, so they don't inflate the
+  "monthly savings" headline; their dollar impact is reported on its own.
+
 Each finding ships with:
 - The exact `aws` CLI command to fix it
 - Whether the fix destroys data (snapshots, volumes)
@@ -103,12 +126,12 @@ cd frontend && npm install && npm run dev
 
 ## Roadmap
 
-- v1.0 — Idle/orphan finder (current)
-- v1.1 — Rightsizing (Compute Optimizer integration)
+- v1.0 — Idle/orphan finder ✅
+- v1.1 — Rightsizing (Compute Optimizer integration) ✅
 - v1.2 — Cost trends (Cost Explorer)
 - v1.3 — Multi-account org scanning
-- v1.4 — Anomaly detection
-- v2.0 — Savings Plans / RI recommendations
+- v1.4 — Anomaly detection (Cost Anomaly Detection) ✅
+- v2.0 — Savings Plans / RI recommendations ✅
 - Packaging — published PyPI release + a one-line Docker image (in progress)
 
 ## Contributing

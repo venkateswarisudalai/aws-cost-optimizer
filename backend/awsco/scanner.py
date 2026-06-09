@@ -60,10 +60,17 @@ def run_scan(
         findings: list[Finding] = []
         errors: list[dict[str, str]] = []
 
-        # One thread per (region, collector). For 9 collectors × ~16 regions
-        # that's ~150 tasks — comfortably small for a thread pool. Each task
-        # runs inside a copy of the current context so it inherits the inline
-        # credentials set above.
+        # Two kinds of collectors:
+        #   - regional: one task per (region, collector) — idle/orphan finders.
+        #   - global:   account-wide (Cost Explorer RI/Savings-Plans/anomaly
+        #     recommendations). These hit the us-east-1 `ce` endpoint and would
+        #     return identical results in every region, so we run them exactly
+        #     once to avoid duplicate findings and wasted API calls.
+        regional = [c for c in ALL_COLLECTORS if not getattr(c, "GLOBAL", False)]
+        global_collectors = [c for c in ALL_COLLECTORS if getattr(c, "GLOBAL", False)]
+
+        # Each task runs inside a copy of the current context so it inherits the
+        # inline credentials set above.
         with ThreadPoolExecutor(max_workers=MAX_REGION_WORKERS) as pool:
             futures = [
                 pool.submit(
@@ -71,7 +78,14 @@ def run_scan(
                     _run_collector, c, r, account_id, profile,
                 )
                 for r in regions
-                for c in ALL_COLLECTORS
+                for c in regional
+            ]
+            futures += [
+                pool.submit(
+                    contextvars.copy_context().run,
+                    _run_collector, c, "us-east-1", account_id, profile,
+                )
+                for c in global_collectors
             ]
             for fut in as_completed(futures):
                 f_list, err = fut.result()
