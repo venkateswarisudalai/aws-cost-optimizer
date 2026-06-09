@@ -4,6 +4,7 @@ import { AlertTriangle, Clock, ListChecks, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { idleHint } from "../lib/findingHints";
 import type { Finding, ScanResult } from "../lib/types";
+import { CategoryBadge } from "./CategoryBadge";
 import { CopyButton } from "./CopyButton";
 import { SeverityBadge } from "./SeverityBadge";
 
@@ -22,6 +23,7 @@ const selectCls =
 export function FindingsTable({ scan }: { scan: ScanResult }) {
   const [severity, setSeverity] = useState("all");
   const [region, setRegion] = useState("all");
+  const [category, setCategory] = useState("all");
   const [q, setQ] = useState("");
 
   const allRegions = useMemo(
@@ -33,6 +35,8 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
     return scan.findings.filter((f) => {
       if (severity !== "all" && f.severity !== severity) return false;
       if (region !== "all" && f.region !== region) return false;
+      if (category !== "all" && (f.category ?? "waste") !== category)
+        return false;
       if (
         q &&
         !`${f.title} ${f.check_id} ${f.resource_id}`
@@ -42,7 +46,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
         return false;
       return true;
     });
-  }, [scan, severity, region, q]);
+  }, [scan, severity, region, category, q]);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.02]">
@@ -71,6 +75,17 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
+          <select
+            className={selectCls}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="all">All categories</option>
+            <option value="waste">Waste</option>
+            <option value="rightsizing">Rightsizing</option>
+            <option value="commitment">Commitment (RI/SP)</option>
+            <option value="anomaly">Anomaly</option>
+          </select>
           <select
             className={selectCls}
             value={severity}
@@ -141,8 +156,11 @@ function FindingRow({ f }: { f: Finding }) {
           <span className="mt-0.5 max-w-md truncate text-xs text-gray-500">
             {f.description}
           </span>
-          <span className="mt-1 font-mono text-[11px] text-gray-600">
-            {f.check_id}
+          <span className="mt-1 flex items-center gap-2">
+            <CategoryBadge category={f.category} />
+            <span className="font-mono text-[11px] text-gray-600">
+              {f.check_id}
+            </span>
           </span>
           {f.fix_destructive && (
             <span className="mt-1 inline-flex items-center gap-1 text-xs text-amber-400">

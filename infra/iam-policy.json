@@ -26,6 +26,12 @@
         "redshift:DescribeClusters",
         "cloudwatch:GetMetricStatistics",
         "cloudwatch:GetMetricData",
+        "compute-optimizer:GetEC2InstanceRecommendations",
+        "compute-optimizer:GetEnrollmentStatus",
+        "ce:GetReservationPurchaseRecommendation",
+        "ce:GetSavingsPlansPurchaseRecommendation",
+        "ce:GetAnomalies",
+        "ce:GetAnomalyMonitors",
         "sts:GetCallerIdentity"
       ],
       "Resource": "*"

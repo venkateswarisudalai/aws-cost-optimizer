@@ -45,3 +45,23 @@ def test_new_collectors_are_registered():
         "redshift.idle",
     }:
         assert expected in registered
+
+
+def test_finops_collectors_are_registered():
+    registered = {c.CHECK_ID for c in ALL_COLLECTORS}
+    for expected in {
+        "ec2.rightsizing",
+        "ce.ri-recommendation",
+        "ce.savings-plan",
+        "ce.anomaly",
+    }:
+        assert expected in registered
+
+
+def test_global_collectors_are_account_wide_ce_checks():
+    # The Cost Explorer checks (and only those) are flagged GLOBAL so the
+    # scanner runs them once instead of once per region.
+    global_ids = {
+        c.CHECK_ID for c in ALL_COLLECTORS if getattr(c, "GLOBAL", False)
+    }
+    assert global_ids == {"ce.ri-recommendation", "ce.savings-plan", "ce.anomaly"}

@@ -1,5 +1,6 @@
 export type Severity = "high" | "medium" | "low";
 export type Confidence = "high" | "medium" | "low";
+export type Category = "waste" | "rightsizing" | "commitment" | "anomaly";
 
 export interface Finding {
   id: string;
@@ -11,6 +12,8 @@ export interface Finding {
   resource_arn: string;
   resource_id: string;
   monthly_savings_usd: number;
+  // Older scans (pre-FinOps) won't carry a category — treat missing as "waste".
+  category?: Category;
   severity: Severity;
   confidence: Confidence;
   cli_fix_command: string;

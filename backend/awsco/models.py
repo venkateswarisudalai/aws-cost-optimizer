@@ -30,6 +30,26 @@ class Confidence(str, Enum):
     LOW = "low"        # heuristic with notable false-positive risk
 
 
+class Category(str, Enum):
+    """What kind of FinOps signal a finding represents.
+
+    `waste` is the original idle/orphan-resource finding — a recurring charge
+    you can stop. The FinOps additions extend the model:
+      - `rightsizing` — a resource that's running but over-provisioned
+        (Compute Optimizer). Savings is the delta, not the full cost.
+      - `commitment` — buy a Reserved Instance / Savings Plan to discount
+        steady-state on-demand usage (Cost Explorer recommendations).
+      - `anomaly` — an unexpected spend spike (Cost Anomaly Detection). Not a
+        recurring saving, so its `monthly_savings_usd` is 0 and the impact
+        lives in `evidence`.
+    """
+
+    WASTE = "waste"
+    RIGHTSIZING = "rightsizing"
+    COMMITMENT = "commitment"
+    ANOMALY = "anomaly"
+
+
 class Finding(BaseModel):
     id: str = Field(description="Stable hash of (check_id + resource_arn)")
     check_id: str = Field(description="e.g. 'ebs.unattached', 'nat.idle'")
@@ -40,6 +60,10 @@ class Finding(BaseModel):
     resource_arn: str
     resource_id: str = Field(description="Short display ID")
     monthly_savings_usd: float
+    category: Category = Field(
+        default=Category.WASTE,
+        description="waste | rightsizing | commitment | anomaly",
+    )
     severity: Severity
     confidence: Confidence
     cli_fix_command: str
@@ -71,3 +95,26 @@ class ScanResult(BaseModel):
     @property
     def finding_count(self) -> int:
         return len(self.findings)
+
+    @property
+    def savings_by_category(self) -> dict[str, float]:
+        """Monthly savings grouped by category (anomalies contribute $0)."""
+        out: dict[str, float] = {}
+        for f in self.findings:
+            out[f.category.value] = round(
+                out.get(f.category.value, 0.0) + f.monthly_savings_usd, 2
+            )
+        return out
+
+    @property
+    def anomaly_impact_usd(self) -> float:
+        """Total dollar impact of detected cost anomalies (one-off, not
+        recurring — kept separate from monthly savings on purpose)."""
+        return round(
+            sum(
+                float(f.evidence.get("impact_usd", 0.0))
+                for f in self.findings
+                if f.category == Category.ANOMALY
+            ),
+            2,
+        )
