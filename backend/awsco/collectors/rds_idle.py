@@ -61,6 +61,21 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
             for db in page["DBInstances"]:
                 if db.get("DBInstanceStatus") != "available":
                     continue
+
+                # Read replicas show 0 DatabaseConnections even when actively
+                # serving reads, and they can't be stopped on their own — a
+                # `stop-db-instance` fix would just fail. Skip them.
+                if db.get("ReadReplicaSourceDBInstanceIdentifier"):
+                    continue
+
+                # Aurora instances are billed and managed at the *cluster*
+                # level. `stop-db-instance` is not valid for an Aurora member
+                # (you must `stop-db-cluster`), so emitting it here gives a
+                # broken recommendation. Aurora-cluster idleness is a separate
+                # check; skip these to keep every fix genuinely runnable.
+                if (db.get("Engine") or "").startswith("aurora"):
+                    continue
+
                 db_id = db["DBInstanceIdentifier"]
                 try:
                     max_conn = _max_connections(cw, db_id)

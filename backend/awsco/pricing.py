@@ -36,6 +36,10 @@ CLOUDWATCH_LOGS_STORAGE_GB_MONTH = 0.03
 # RDS manual snapshot / backup storage beyond the free tier ($/GB-month).
 RDS_SNAPSHOT_GB_MONTH = 0.095
 
+# S3 Standard storage ($/GB-month, first 50 TB tier, us-east-1). Used to price
+# the orphaned data left behind by incomplete multipart uploads.
+S3_STANDARD_GB_MONTH = 0.023
+
 # DynamoDB provisioned capacity ($/hour per unit, us-east-1).
 DYNAMODB_RCU_HOURLY = 0.00013
 DYNAMODB_WCU_HOURLY = 0.00065
