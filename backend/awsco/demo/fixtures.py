@@ -212,6 +212,33 @@ def build_demo_scan() -> ScanResult:
             "aws rds delete-db-snapshot --region us-east-1 --db-snapshot-identifier prod-db-pre-migration",
             True, {"size_gb": 400, "age_days": 288, "engine": "postgres", "source_db": "prod-db"},
         ),
+        _f(
+            "s3.incomplete-multipart-upload",
+            "37 incomplete multipart upload(s) in 'data-lake-staging' (~64.20 GB orphaned)",
+            "Bucket has 37 multipart uploads older than 7 days that were never "
+            "completed or aborted — the parts keep billing storage but aren't visible "
+            "as objects.",
+            "s3", "us-east-1", "data-lake-staging",
+            1.48, Confidence.HIGH,
+            "aws s3api put-bucket-lifecycle-configuration --region us-east-1 "
+            "--bucket data-lake-staging --lifecycle-configuration '{...}'",
+            False, {
+                "bucket": "data-lake-staging", "stale_upload_count": 37,
+                "orphaned_bytes": 68943966208, "orphaned_gb": 64.2, "min_age_days": 7,
+            },
+        ),
+        _f(
+            "opensearch.idle",
+            "Idle OpenSearch domain 'logs-search-old' (2× r5.large.search)",
+            "Domain served effectively no searches or indexing over the last 7 days.",
+            "es", "us-east-1", "logs-search-old",
+            267.84, Confidence.MEDIUM,
+            "aws opensearch delete-domain --region us-east-1 --domain-name logs-search-old",
+            True, {
+                "instance_type": "r5.large.search", "instance_count": 2,
+                "dedicated_master": False, "search_plus_indexing_7d": 0.0,
+            },
+        ),
         # --- FinOps recommendations -------------------------------------------
         _f(
             "ec2.rightsizing",

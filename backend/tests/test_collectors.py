@@ -43,6 +43,8 @@ def test_new_collectors_are_registered():
         "dynamodb.idle-provisioned",
         "elasticache.idle",
         "redshift.idle",
+        "opensearch.idle",
+        "s3.incomplete-multipart-upload",
     }:
         assert expected in registered
 
@@ -59,9 +61,16 @@ def test_finops_collectors_are_registered():
 
 
 def test_global_collectors_are_account_wide_ce_checks():
-    # The Cost Explorer checks (and only those) are flagged GLOBAL so the
-    # scanner runs them once instead of once per region.
+    # Account-wide checks are flagged GLOBAL so the scanner runs them once
+    # instead of once per region: the Cost Explorer recommendations, plus the
+    # S3 multipart check (list_buckets is global; each bucket is inspected in
+    # its own home region).
     global_ids = {
         c.CHECK_ID for c in ALL_COLLECTORS if getattr(c, "GLOBAL", False)
     }
-    assert global_ids == {"ce.ri-recommendation", "ce.savings-plan", "ce.anomaly"}
+    assert global_ids == {
+        "ce.ri-recommendation",
+        "ce.savings-plan",
+        "ce.anomaly",
+        "s3.incomplete-multipart-upload",
+    }

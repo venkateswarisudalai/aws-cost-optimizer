@@ -83,10 +83,46 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                     hourly = EC2_HOURLY.get(inst_type, DEFAULT_HOURLY)
                     monthly = round(hourly * HOURS_PER_MONTH, 2)
                     arn = f"arn:aws:ec2:{region}:{account_id}:instance/{inst_id}"
-                    name_tag = next(
-                        (t["Value"] for t in inst.get("Tags", []) if t["Key"] == "Name"),
-                        inst_id,
-                    )
+                    tags = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
+                    name_tag = tags.get("Name", inst_id)
+
+                    # An instance launched by an Auto Scaling group can't simply
+                    # be stopped — the ASG treats a stop as an unhealthy node and
+                    # relaunches/replaces it, so the saving never materialises.
+                    # The genuine fix is to lower the group's desired capacity or
+                    # adjust its scaling policy. Surface that instead of a stop.
+                    asg_name = tags.get("aws:autoscaling:groupName")
+                    if asg_name:
+                        cli_fix = (
+                            f"# '{name_tag}' is managed by Auto Scaling group "
+                            f"'{asg_name}'. Stopping it just triggers a replacement. "
+                            "Reduce capacity instead, e.g.: "
+                            f"aws autoscaling set-desired-capacity --region {region} "
+                            f"--auto-scaling-group-name {asg_name} "
+                            "--desired-capacity <lower-N>"
+                        )
+                        description = (
+                            f"Instance {inst_id} is running (fully billed) but peaked at "
+                            f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
+                            f"It belongs to Auto Scaling group '{asg_name}', so don't stop "
+                            "it directly (the ASG would replace it). Lower the group's "
+                            "desired capacity or tune its scaling policy. Savings shown is "
+                            "one instance's full cost."
+                        )
+                        confidence = Confidence.LOW
+                    else:
+                        cli_fix = (
+                            f"aws ec2 stop-instances --region {region} "
+                            f"--instance-ids {inst_id}"
+                        )
+                        description = (
+                            f"Instance {inst_id} is running (fully billed) but peaked at "
+                            f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
+                            "Stop it if unused, or rightsize to a smaller type. The "
+                            "savings shown is the full instance cost; rightsizing "
+                            "recovers part of it."
+                        )
+                        confidence = Confidence.MEDIUM  # low CPU != definitely unused
 
                     findings.append(
                         Finding(
@@ -96,34 +132,24 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                                 f"Idle EC2 '{name_tag}' ({inst_type}), "
                                 f"max {max_cpu:.1f}% CPU over {LOOKBACK_DAYS}d"
                             ),
-                            description=(
-                                f"Instance {inst_id} is running (fully billed) but peaked at "
-                                f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
-                                "Stop it if unused, or rightsize to a smaller type. The "
-                                "savings shown is the full instance cost; rightsizing "
-                                "recovers part of it."
-                            ),
+                            description=description,
                             service="ec2",
                             region=region,
                             resource_arn=arn,
                             resource_id=inst_id,
                             monthly_savings_usd=monthly,
                             severity=Severity.from_monthly_usd(monthly),
-                            confidence=Confidence.MEDIUM,  # low CPU != definitely unused
-                            cli_fix_command=(
-                                f"aws ec2 stop-instances --region {region} "
-                                f"--instance-ids {inst_id}"
-                            ),
+                            confidence=confidence,
+                            cli_fix_command=cli_fix,
                             fix_destructive=False,  # stop is reversible; data on EBS survives
                             evidence={
                                 "instance_type": inst_type,
                                 "max_cpu_pct_7d": round(max_cpu, 2),
+                                "auto_scaling_group": asg_name,
                                 "launch_time": inst.get("LaunchTime").isoformat()
                                 if inst.get("LaunchTime")
                                 else None,
-                                "tags": {
-                                    t["Key"]: t["Value"] for t in inst.get("Tags", [])
-                                },
+                                "tags": tags,
                             },
                         )
                     )

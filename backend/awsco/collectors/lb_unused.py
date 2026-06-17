@@ -46,6 +46,13 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
         lb_name = lb["LoadBalancerName"]
         lb_type = lb["Type"]  # 'application' | 'network' | 'gateway'
 
+        # Gateway Load Balancers have different pricing (per-hour + GLCU) and
+        # different CloudWatch metrics than ALB/NLB. Pricing them at the ALB
+        # rate and recommending a plain delete would be wrong, so skip them
+        # rather than emit a misleading finding.
+        if lb_type == "gateway":
+            continue
+
         # Try targets first — cheap
         targets_attached = False
         try:

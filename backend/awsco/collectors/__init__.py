@@ -23,9 +23,11 @@ from awsco.collectors import (
     elasticache_idle,
     lb_unused,
     nat_idle,
+    opensearch_idle,
     rds_idle,
     rds_snapshots_old,
     redshift_idle,
+    s3_incomplete_multipart,
 )
 
 ALL_COLLECTORS = [
@@ -43,6 +45,8 @@ ALL_COLLECTORS = [
     dynamodb_idle,
     elasticache_idle,
     redshift_idle,
+    opensearch_idle,
+    s3_incomplete_multipart,
     # FinOps recommendations (rightsizing / commitments / anomalies)
     compute_optimizer_rightsizing,
     ce_ri_recommendations,
