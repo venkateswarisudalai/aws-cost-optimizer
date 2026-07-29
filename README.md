@@ -48,7 +48,6 @@ pip install -e .
 awsco serve              # dashboard at http://localhost:3000
                          # add --demo-data to explore without an AWS account
 ```
-
 ## What it finds (v1)
 
 | Check | Typical savings | Confidence |
