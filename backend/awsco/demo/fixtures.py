@@ -67,6 +67,31 @@ DEMO_SPEND = {
 }
 
 
+# Who each demo resource belongs to, as tag / CloudTrail resolution would find it.
+DEMO_OWNERS = {
+    "i-0idleanalytics01": {
+        "source": "cloudtrail", "name": "priya@example.com", "email": "priya@example.com",
+        "event_name": "RunInstances", "event_time": "2026-04-11T09:12:00+00:00",
+        "relationship": "created", "identity_type": "AssumedRole",
+    },
+    "vol-0abc1234": {
+        "source": "tag", "name": "team-data", "email": None, "tag_key": "team",
+    },
+    "nat-0a1b2c3d4e5f6": {
+        "source": "cloudtrail", "name": "terraform-ci (role deployer)", "email": None,
+        "event_name": "CreateNatGateway", "event_time": "2026-03-02T17:40:00+00:00",
+        "relationship": "created", "identity_type": "AssumedRole",
+    },
+    "prod-leftover-db": {
+        "source": "tag", "name": "sam@example.com", "email": "sam@example.com",
+        "tag_key": "owner",
+    },
+    "sg-0bastion": {
+        "source": "unknown", "note": "no owner tag, and no CloudTrail activity in the last 90 days",
+    },
+}
+
+
 def build_demo_scan() -> ScanResult:
     now = datetime.now(timezone.utc)
     findings = [
@@ -388,6 +413,10 @@ def build_demo_scan() -> ScanResult:
             category=Category.HYGIENE,
         ),
     ]
+
+    for f in findings:
+        if f.resource_id in DEMO_OWNERS:
+            f.owner = DEMO_OWNERS[f.resource_id]
 
     return ScanResult(
         scan_id=str(uuid.uuid4()),

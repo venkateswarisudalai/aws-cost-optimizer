@@ -3,6 +3,31 @@ export type Confidence = "high" | "medium" | "low";
 export type Category = "waste" | "rightsizing" | "commitment" | "anomaly" | "hygiene";
 export type RiskLevel = "safe" | "restart" | "destructive" | "commitment" | "info";
 
+/** Who owns a resource (resource tags first, then CloudTrail). */
+export interface Owner {
+  source: "tag" | "cloudtrail" | "unknown";
+  name?: string | null;
+  email?: string | null;
+  tag_key?: string;
+  event_name?: string;
+  event_time?: string;
+  relationship?: string;
+  note?: string;
+}
+
+/** An owner's answer to "is this still needed?" on Slack. */
+export interface Confirmation {
+  finding_id: string;
+  resource_id: string;
+  owner_name: string | null;
+  channel: string | null;
+  status: "pending" | "keep" | "delete_ok";
+  responder: string | null;
+  note: string | null;
+  asked_at: string;
+  answered_at: string | null;
+}
+
 /** How to act on a finding — the same four answers for every check. */
 export interface Guidance {
   recommendation: string;
@@ -34,6 +59,7 @@ export interface Finding {
   // pool — an alternative, so it's left out of savings totals.
   superseded_by?: string | null;
   guidance?: Guidance | null;
+  owner?: Owner | null;
   detected_at: string;
 }
 

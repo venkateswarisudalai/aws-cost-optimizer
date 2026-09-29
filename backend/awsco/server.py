@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -24,6 +25,7 @@ from awsco.aws import (
     list_profiles,
 )
 from awsco.demo.fixtures import build_demo_scan
+from awsco import slack
 from awsco.guidance import attach_guidance
 from awsco.models import ScanResult
 from awsco.regions import DEFAULT_ENABLED, commercial_regions
@@ -31,7 +33,9 @@ from awsco.scanner import AccountMismatchError, run_scan
 from awsco.storage import (
     get_scan,
     latest_scan,
+    list_confirmations,
     list_scans,
+    save_confirmation,
     save_scan,
 )
 
@@ -59,6 +63,12 @@ class ScanRequest(BaseModel):
     credentials: AwsCredentials | None = None
     expected_account_id: AccountId | None = None
     lookback_days: int = Field(default=7, ge=1, le=60)
+
+
+class AskOwnerRequest(BaseModel):
+    # Build the Slack message without sending it (always true in demo mode
+    # or when no bot token is configured).
+    dry_run: bool = False
 
 
 class ConnectRequest(BaseModel):
@@ -265,6 +275,86 @@ def create_app() -> FastAPI:
             ),
             "demo": False,
         }
+
+    # --- Slack owner confirmations -------------------------------------------
+
+    @app.get("/slack/status")
+    def slack_status():
+        cfg = slack.config()
+        return {
+            "configured": cfg["configured"],
+            "channel": cfg["channel"],
+            "demo": AppState.demo_mode,
+        }
+
+    @app.post("/findings/{finding_id}/ask-owner")
+    def ask_owner(finding_id: str, req: AskOwnerRequest | None = None):
+        scan = latest_scan()
+        finding = next((f for f in scan.findings if f.id == finding_id), None) if scan else None
+        if finding is None:
+            raise HTTPException(status_code=404, detail="Finding not in the latest scan")
+        simulate = AppState.demo_mode or not slack.config()["configured"]
+        dry_run = simulate or (req.dry_run if req else False)
+        try:
+            result = slack.ask_owner(finding, dry_run=dry_run)
+        except slack.SlackError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if result["sent"] or AppState.demo_mode:
+            save_confirmation({
+                "finding_id": finding.id,
+                "scan_id": scan.scan_id,
+                "check_id": finding.check_id,
+                "resource_id": finding.resource_id,
+                "region": finding.region,
+                "owner_name": (finding.owner or {}).get("name"),
+                "owner_slack_id": result.get("owner_slack_id"),
+                "channel": result.get("channel") or ("demo" if AppState.demo_mode else None),
+                "message_ts": result.get("ts"),
+                "status": "pending",
+                "asked_at": datetime.now(timezone.utc).isoformat(),
+            })
+        return {
+            **result,
+            "simulated": simulate,
+            "reason": (
+                "demo mode" if AppState.demo_mode
+                else "AWSCO_SLACK_BOT_TOKEN not set" if simulate else None
+            ),
+        }
+
+    @app.post("/confirmations/sync")
+    def sync_confirmations():
+        """Read reactions for every pending ask and record the answers."""
+        updated = 0
+        errors: list[str] = []
+        for row in list_confirmations():
+            if row["status"] != "pending":
+                continue
+            if AppState.demo_mode:
+                # Sample answer so the flow can be rehearsed end to end.
+                answer = {"status": "delete_ok", "responder": "demo-teammate",
+                          "note": "(demo) Left over from the 2024 migration, fine to remove."}
+            elif row["channel"] and row["message_ts"]:
+                try:
+                    answer = slack.read_answer(
+                        row["channel"], row["message_ts"], row["owner_slack_id"]
+                    )
+                except slack.SlackError as exc:
+                    errors.append(f"{row['resource_id']}: {exc}")
+                    continue
+            else:
+                continue
+            if answer["status"] == "pending":
+                continue
+            save_confirmation({
+                **row, **answer, "answered_at": datetime.now(timezone.utc).isoformat()
+            })
+            updated += 1
+        return {"updated": updated, "errors": errors, "confirmations": list_confirmations()}
+
+    @app.get("/confirmations")
+    def confirmations():
+        return {"confirmations": list_confirmations()}
 
     @app.get("/scans")
     def scans(limit: int = Query(default=50, le=200)):

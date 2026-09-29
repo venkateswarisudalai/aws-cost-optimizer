@@ -13,6 +13,7 @@ from awsco.aws import InlineCredentials, caller_identity, enabled_regions
 from awsco.collectors import ALL_COLLECTORS
 from awsco.guidance import attach_guidance
 from awsco.models import Category, Finding, ScanResult
+from awsco import ownership
 from awsco.spend import spend_summary
 
 log = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ def run_scan(
     credentials: InlineCredentials | None = None,
     expected_account_id: str | None = None,
     lookback_days: int | None = None,
+    resolve_owners: bool = True,
 ) -> ScanResult:
     started = datetime.now(timezone.utc)
 
@@ -160,6 +162,9 @@ def run_scan(
                     errors.append(err)
 
         spend = spend_summary(profile=profile)
+        if resolve_owners:
+            # Tags first, then CloudTrail (capped, paced): who to ask on Slack.
+            ownership.resolve_owners(findings, profile=profile)
     finally:
         if token is not None:
             aws.reset_inline_credentials(token)

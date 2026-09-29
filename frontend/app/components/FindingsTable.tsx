@@ -10,12 +10,14 @@ import {
   Search,
   Undo2,
 } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { idleHint } from "../lib/findingHints";
 import { regionLabel } from "../lib/regions";
-import type { Finding, RiskLevel, ScanResult } from "../lib/types";
+import { listConfirmations, syncConfirmations } from "../lib/api";
+import type { Confirmation, Finding, RiskLevel, ScanResult } from "../lib/types";
 import { CategoryBadge } from "./CategoryBadge";
 import { CopyButton } from "./CopyButton";
+import { ConfirmationBadge, OwnerPanel } from "./OwnerPanel";
 import { RiskBadge } from "./RiskBadge";
 import { SeverityBadge } from "./SeverityBadge";
 
@@ -37,6 +39,36 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
   const [category, setCategory] = useState("all");
   const [risk, setRisk] = useState("all");
   const [q, setQ] = useState("");
+  const [confirmations, setConfirmations] = useState<Record<string, Confirmation>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+
+  const index = (rows: Confirmation[]) =>
+    setConfirmations(Object.fromEntries(rows.map((c) => [c.finding_id, c])));
+
+  const refresh = useCallback(() => {
+    listConfirmations().then(index).catch(() => {});
+  }, []);
+  useEffect(refresh, [refresh, scan]);
+
+  async function checkReplies() {
+    setSyncing(true);
+    setSyncNote(null);
+    try {
+      const res = await syncConfirmations();
+      index(res.confirmations);
+      setSyncNote(
+        res.errors.length
+          ? `${res.updated} updated · ${res.errors.length} error(s): ${res.errors[0]}`
+          : `${res.updated} new answer${res.updated === 1 ? "" : "s"}`,
+      );
+    } catch (e) {
+      setSyncNote(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSyncing(false);
+    }
+  }
+  const pending = Object.values(confirmations).filter((c) => c.status === "pending").length;
 
   // Every region the scan covered (not just those with findings), plus
   // "global" for account-wide checks, each with its finding count.
@@ -79,6 +111,16 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
             <p className="text-xs text-gray-500">
               Sorted by monthly savings · {filtered.length} shown
             </p>
+            {Object.keys(confirmations).length > 0 && (
+              <button
+                onClick={checkReplies}
+                disabled={syncing}
+                className="mt-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+              >
+                {syncing ? "Checking Slack…" : `Check Slack replies${pending ? ` (${pending} waiting)` : ""}`}
+              </button>
+            )}
+            {syncNote && <p className="text-[11px] text-gray-500">{syncNote}</p>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -159,7 +201,12 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
           </thead>
           <tbody className="divide-y divide-white/5">
             {filtered.map((f) => (
-              <FindingRow key={f.id} f={f} />
+              <FindingRow
+                key={f.id}
+                f={f}
+                confirmation={confirmations[f.id]}
+                onAsked={refresh}
+              />
             ))}
             {filtered.length === 0 && (
               <tr>
@@ -184,7 +231,15 @@ function riskOf(f: Finding): RiskLevel {
   return f.fix_destructive ? "destructive" : "restart";
 }
 
-function FindingRow({ f }: { f: Finding }) {
+function FindingRow({
+  f,
+  confirmation,
+  onAsked,
+}: {
+  f: Finding;
+  confirmation?: Confirmation;
+  onAsked: () => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Fragment>
@@ -227,6 +282,7 @@ function FindingRow({ f }: { f: Finding }) {
             {f.category !== "commitment" && f.category !== "anomaly" && (
               <RiskBadge level={riskOf(f)} />
             )}
+            <ConfirmationBadge c={confirmation} />
             <span className="font-mono text-[11px] text-gray-600">
               {f.check_id}
             </span>
@@ -253,6 +309,11 @@ function FindingRow({ f }: { f: Finding }) {
         <td />
         <td colSpan={6} className="px-3 pb-5 pt-1">
           <GuidancePanel f={f} />
+          {f.category !== "commitment" && f.category !== "anomaly" && (
+            <div className="sticky left-0 mt-3 w-[min(44rem,calc(100vw-5rem))]">
+              <OwnerPanel f={f} confirmation={confirmation} onAsked={onAsked} />
+            </div>
+          )}
         </td>
       </tr>
     )}

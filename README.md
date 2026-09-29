@@ -121,6 +121,34 @@ Each finding ships with:
 - Estimated monthly savings (US-east-1 pricing)
 - Evidence (last-used timestamp, current utilization)
 
+## Ask owners on Slack
+
+Before deleting anything, ask the person who created it. Each finding shows its
+**owner**, taken from an `Owner` / `CreatedBy` / `Team` / `Email` tag or, failing that,
+from the CloudTrail event that created it (last 90 days). **Ask on Slack** posts:
+
+> *@priya, is this still needed?* Idle EC2 'analytics-box' (m5.2xlarge)… React ✅ to keep
+> it, or 🗑️ if it's OK to delete.
+
+in your team channel (or as a DM). **Check Slack replies** reads the reactions
+back, and the answer (who, when, and any thread reply) is stored locally as the
+owner-confirmation evidence a SOC 2 change ticket needs. Only the owner's reaction
+counts when the owner is known, and ✅ keep beats 🗑️ delete. Nothing is ever
+deleted automatically.
+
+Setup: create a Slack app, add the bot scopes listed in [`.env.example`](.env.example),
+install it, invite the bot to your channel, then:
+
+```bash
+export AWSCO_SLACK_BOT_TOKEN=xoxb-…   # never commit this
+export AWSCO_SLACK_CHANNEL=C0123ABCD
+awsco serve
+```
+
+Without a token the button shows a preview of the message instead of sending it.
+It uses Slack's Web API only (outbound HTTPS), so the local server never has to be
+reachable from the internet.
+
 ## Permissions
 
 The IAM policy lives in [`infra/iam-policy.json`](infra/iam-policy.json). It's read-only — no `Delete*`, `Modify*`, or `Create*` actions. You apply the suggested fixes yourself.

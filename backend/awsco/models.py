@@ -73,6 +73,11 @@ class Finding(BaseModel):
         description="True if applying the fix deletes data (e.g., snapshot, volume)"
     )
     evidence: dict[str, Any] = Field(default_factory=dict)
+    owner: dict[str, Any] | None = Field(
+        default=None,
+        description="Who owns it: source (tag | cloudtrail | unknown), name, email, "
+        "event_name, event_time (see awsco.ownership)",
+    )
     guidance: dict[str, Any] | None = Field(
         default=None,
         description="recommendation / risk_level / risks / before_you_act / undo "

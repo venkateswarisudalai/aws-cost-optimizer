@@ -1,6 +1,7 @@
 import { demoRegions, demoScan } from "./demoData";
 import type {
   AwsCredentials,
+  Confirmation,
   RegionInfo,
   ScanResult,
   ValidateResult,
@@ -112,4 +113,71 @@ export async function validateConnection(input: {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// --- Slack owner confirmations ---------------------------------------------
+
+export interface AskOwnerResult {
+  sent: boolean;
+  simulated: boolean;
+  reason: string | null;
+  message: { text: string };
+}
+
+// The hosted demo has no backend; keep asks in memory so the flow still works.
+const demoAsks = new Map<string, Confirmation>();
+
+export async function askOwner(findingId: string): Promise<AskOwnerResult> {
+  if (DEMO) {
+    const f = demoScan().findings.find((x) => x.id === findingId);
+    demoAsks.set(findingId, {
+      finding_id: findingId,
+      resource_id: f?.resource_id ?? findingId,
+      owner_name: f?.owner?.name ?? null,
+      channel: "demo",
+      status: "pending",
+      responder: null,
+      note: null,
+      asked_at: new Date().toISOString(),
+      answered_at: null,
+    });
+    return {
+      sent: false,
+      simulated: true,
+      reason: "demo mode",
+      message: { text: `Is this still needed? ${f?.title ?? findingId}` },
+    };
+  }
+  return request<AskOwnerResult>(`/findings/${encodeURIComponent(findingId)}/ask-owner`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function listConfirmations(): Promise<Confirmation[]> {
+  if (DEMO) return Array.from(demoAsks.values());
+  return (await request<{ confirmations: Confirmation[] }>("/confirmations")).confirmations;
+}
+
+export async function syncConfirmations(): Promise<{
+  updated: number;
+  errors: string[];
+  confirmations: Confirmation[];
+}> {
+  if (DEMO) {
+    let updated = 0;
+    for (const c of demoAsks.values()) {
+      if (c.status === "pending") {
+        Object.assign(c, {
+          status: "delete_ok",
+          responder: "demo-teammate",
+          note: "(demo) Left over from the 2024 migration, fine to remove.",
+          answered_at: new Date().toISOString(),
+        });
+        updated++;
+      }
+    }
+    return { updated, errors: [], confirmations: Array.from(demoAsks.values()) };
+  }
+  return request("/confirmations/sync", { method: "POST", body: "{}" });
 }
