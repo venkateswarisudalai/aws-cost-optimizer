@@ -51,6 +51,12 @@ Issues = "https://github.com/venkateswarisudalai/aws-cost-optimizer/issues"
 where = ["."]
 include = ["awsco*"]
 
+# The built dashboard lives in awsco/static/ and is not a Python package, so it
+# has to be declared explicitly or `pip install .` yields a wheel where
+# `awsco serve` has no frontend to mount.
+[tool.setuptools.package-data]
+awsco = ["static/**/*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

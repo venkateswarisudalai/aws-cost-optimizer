@@ -1,0 +1,27 @@
+**/.git
+**/.gitignore
+**/node_modules
+**/.next
+**/out
+**/.venv
+**/.venv-dev
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.vercel
+**/*.tsbuildinfo
+**/.env
+**/.env.local
+**/.aws
+**/.DS_Store
+
+# The dashboard is rebuilt in stage 1; keep the committed build (and its
+# backups) out of the context so stage 2 gets a clean awsco/static/.
+backend/awsco/static
+backend/awsco/static.bak-*
+
+docs/
+data/

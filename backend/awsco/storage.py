@@ -7,12 +7,25 @@ Findings can be re-derived from the JSON. Keeps backups portable and trivial.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 from awsco.models import ScanResult
 
-DEFAULT_DB_PATH = Path.home() / ".awsco" / "scans.sqlite"
+
+def _default_db_path() -> Path:
+    """Where scan history lives.
+
+    AWSCO_DATA_DIR lets the Docker image point this at a mounted volume rather
+    than the container user's home, which is not persisted between runs.
+    """
+    override = os.environ.get("AWSCO_DATA_DIR")
+    base = Path(override) if override else Path.home() / ".awsco"
+    return base / "scans.sqlite"
+
+
+DEFAULT_DB_PATH = _default_db_path()
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
