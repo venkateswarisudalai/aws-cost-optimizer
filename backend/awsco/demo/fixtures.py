@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from awsco.models import Category, Confidence, Finding, ScanResult, Severity
 from awsco.guidance import attach_guidance
+from awsco.regions import commercial_regions
 from awsco.scanner import mark_overlaps, roll_up_vpcs
 
 
@@ -393,7 +394,9 @@ def build_demo_scan() -> ScanResult:
         account_id="123456789012",
         started_at=now - timedelta(seconds=12),
         finished_at=now,
-        regions_scanned=["us-east-1", "us-west-2", "eu-west-1"],
+        # A demo account opted in to every region; findings just happen to sit
+        # in three of them.
+        regions_scanned=commercial_regions(),
         findings=attach_guidance(
             roll_up_vpcs(mark_overlaps(sorted(findings, key=lambda f: -f.monthly_savings_usd)))
         ),

@@ -26,6 +26,7 @@ from awsco.aws import (
 from awsco.demo.fixtures import build_demo_scan
 from awsco.guidance import attach_guidance
 from awsco.models import ScanResult
+from awsco.regions import DEFAULT_ENABLED, commercial_regions
 from awsco.scanner import AccountMismatchError, run_scan
 from awsco.storage import (
     get_scan,
@@ -106,23 +107,16 @@ async def lifespan(app: FastAPI):
 
 
 def _demo_regions() -> list[dict[str, object]]:
-    """A representative slice of the real catalog for demo mode: the common
-    enabled regions plus a couple of not-activated opt-in regions."""
-    enabled = [
-        "us-east-1", "us-east-2", "us-west-1", "us-west-2",
-        "eu-west-1", "eu-west-2", "eu-central-1",
-        "ap-south-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1",
-        "ca-central-1", "sa-east-1",
+    """The full commercial region catalog, as a demo account that has opted in
+    to every region (so the dashboard shows all of them scannable)."""
+    return [
+        {
+            "name": r,
+            "opt_in_status": "opt-in-not-required" if r in DEFAULT_ENABLED else "opted-in",
+            "enabled": True,
+        }
+        for r in commercial_regions()
     ]
-    not_opted = ["ap-east-1", "me-south-1", "af-south-1"]
-    rows = [
-        {"name": r, "opt_in_status": "opt-in-not-required", "enabled": True}
-        for r in enabled
-    ] + [
-        {"name": r, "opt_in_status": "not-opted-in", "enabled": False}
-        for r in not_opted
-    ]
-    return sorted(rows, key=lambda x: str(x["name"]))
 
 
 def _dev_origins() -> list[str]:

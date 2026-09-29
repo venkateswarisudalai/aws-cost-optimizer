@@ -276,22 +276,34 @@ const FINDINGS: Finding[] = [
   },
 ];
 
-const REGIONS_SCANNED = ["us-east-1", "us-west-2", "eu-west-1"];
 
-// Mirrors server._demo_regions(): common enabled regions + a few not-activated.
-export const demoRegions: RegionInfo[] = [
-  ...[
-    "us-east-1", "us-east-2", "us-west-1", "us-west-2",
-    "eu-west-1", "eu-west-2", "eu-central-1",
-    "ap-south-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1",
-    "ca-central-1", "sa-east-1",
-  ].map((name) => ({ name, opt_in_status: "opt-in-not-required", enabled: true })),
-  ...["ap-east-1", "me-south-1", "af-south-1"].map((name) => ({
-    name,
-    opt_in_status: "not-opted-in",
-    enabled: false,
-  })),
-].sort((a, b) => a.name.localeCompare(b.name));
+
+// Every AWS commercial region (mirrors server._demo_regions()): the demo
+// account has opted in to all of them, so all are scannable.
+export const ALL_REGIONS = [
+  "af-south-1", "ap-east-1", "ap-east-2", "ap-northeast-1",
+  "ap-northeast-2", "ap-northeast-3", "ap-south-1", "ap-south-2",
+  "ap-southeast-1", "ap-southeast-2", "ap-southeast-3", "ap-southeast-4",
+  "ap-southeast-5", "ap-southeast-6", "ap-southeast-7", "ca-central-1",
+  "ca-west-1", "eu-central-1", "eu-central-2", "eu-north-1",
+  "eu-south-1", "eu-south-2", "eu-west-1", "eu-west-2",
+  "eu-west-3", "il-central-1", "me-central-1", "me-south-1",
+  "mx-central-1", "sa-east-1", "us-east-1", "us-east-2",
+  "us-west-1", "us-west-2",
+];
+
+const DEFAULT_ENABLED = new Set([
+  "us-east-1", "us-east-2", "us-west-1", "us-west-2", "ca-central-1", "sa-east-1",
+  "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-north-1",
+  "ap-south-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3",
+  "ap-southeast-1", "ap-southeast-2",
+]);
+
+export const demoRegions: RegionInfo[] = ALL_REGIONS.map((name) => ({
+  name,
+  opt_in_status: DEFAULT_ENABLED.has(name) ? "opt-in-not-required" : "opted-in",
+  enabled: true,
+}));
 
 const DEMO_SPEND = {
   period_start: "2026-05-02",
@@ -321,8 +333,8 @@ export function demoScan(regions?: string[] | null): ScanResult {
     (f) => ({ ...f, guidance: DEMO_GUIDANCE[`${f.check_id}|${f.resource_id}`] ?? null }),
   );
   const scanned = wanted
-    ? REGIONS_SCANNED.filter((r) => wanted.has(r))
-    : REGIONS_SCANNED;
+    ? ALL_REGIONS.filter((r) => wanted.has(r))
+    : ALL_REGIONS;
   return {
     scan_id: "demo-scan",
     account_id: ACCOUNT,

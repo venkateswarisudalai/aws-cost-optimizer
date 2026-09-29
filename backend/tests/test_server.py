@@ -63,3 +63,14 @@ def test_credential_warnings_flag_root_and_long_lived_keys():
     root = credential_warnings("arn:aws:iam::123456789012:root", "AKIAEXAMPLE")
     assert len(root) == 2 and "ROOT" in root[0]
     assert credential_warnings("arn:aws:sts::1:assumed-role/r/s", "ASIAEXAMPLE") == []
+
+
+def test_demo_lists_every_commercial_region():
+    from awsco.regions import commercial_regions
+
+    AppState.demo_mode = True
+    client = TestClient(create_app())
+    names = [r["name"] for r in client.get("/aws/regions").json()["regions"]]
+    assert names == commercial_regions()
+    assert len(names) >= 34 and {"mx-central-1", "ap-southeast-7", "ca-west-1"} <= set(names)
+    assert len(client.post("/scan", json={}).json()["regions_scanned"]) == len(names)

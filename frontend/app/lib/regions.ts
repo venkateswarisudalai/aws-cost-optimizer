@@ -9,12 +9,16 @@ const REGION_NAMES: Record<string, string> = {
   "us-west-2": "Oregon",
   "af-south-1": "Cape Town",
   "ap-east-1": "Hong Kong",
+  "ap-east-2": "Taipei",
   "ap-south-1": "Mumbai",
   "ap-south-2": "Hyderabad",
   "ap-southeast-1": "Singapore",
   "ap-southeast-2": "Sydney",
   "ap-southeast-3": "Jakarta",
   "ap-southeast-4": "Melbourne",
+  "ap-southeast-5": "Malaysia",
+  "ap-southeast-6": "New Zealand",
+  "ap-southeast-7": "Thailand",
   "ap-northeast-1": "Tokyo",
   "ap-northeast-2": "Seoul",
   "ap-northeast-3": "Osaka",
@@ -32,6 +36,7 @@ const REGION_NAMES: Record<string, string> = {
   "me-central-1": "UAE",
   "il-central-1": "Tel Aviv",
   "sa-east-1": "São Paulo",
+  "mx-central-1": "Mexico",
 };
 
 /** "N. California" for "us-west-1", else the raw code. */
