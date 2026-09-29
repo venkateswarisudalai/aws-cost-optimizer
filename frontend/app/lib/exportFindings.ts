@@ -37,7 +37,8 @@ function ownerLabel(f: Finding): string {
 
 /** Account-wide rows (commitments, anomalies) have no single owner. */
 function ownerOrDash(f: Finding): string {
-  return ownerLabel(f) || (f.region === "global" ? "—" : "unknown");
+  if (f.category === "commitment" || f.category === "anomaly") return "—";
+  return ownerLabel(f) || "unknown";
 }
 
 function ownerSource(f: Finding): string {

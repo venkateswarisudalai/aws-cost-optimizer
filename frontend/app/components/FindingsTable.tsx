@@ -16,6 +16,7 @@ import { idleHint } from "../lib/findingHints";
 import { regionLabel } from "../lib/regions";
 import { listConfirmations, slackStatus, syncConfirmations } from "../lib/api";
 import { downloadFindings, type ExportFormat } from "../lib/exportFindings";
+import { printReport } from "../lib/reportPdf";
 import type {
   Confirmation,
   Finding,
@@ -151,7 +152,9 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
           <DownloadMenu
             count={filtered.length}
             onPick={(fmt) =>
-              downloadFindings(fmt, scan, filtered, confirmations)
+              fmt === "pdf"
+                ? printReport(scan, filtered, confirmations)
+                : downloadFindings(fmt, scan, filtered, confirmations)
             }
           />
           <div className="relative">
@@ -496,7 +499,10 @@ function IdleCell({ f }: { f: Finding }) {
   );
 }
 
-const FORMATS: { fmt: ExportFormat; label: string; hint: string }[] = [
+type MenuFormat = ExportFormat | "pdf";
+
+const FORMATS: { fmt: MenuFormat; label: string; hint: string }[] = [
+  { fmt: "pdf", label: "PDF", hint: "report to share" },
   { fmt: "csv", label: "CSV", hint: "Excel / Google Sheets" },
   { fmt: "md", label: "Markdown", hint: "change ticket / report" },
   { fmt: "json", label: "JSON", hint: "scripts" },
@@ -508,7 +514,7 @@ function DownloadMenu({
   onPick,
 }: {
   count: number;
-  onPick: (f: ExportFormat) => void;
+  onPick: (f: MenuFormat) => void;
 }) {
   return (
     <details className="group relative">

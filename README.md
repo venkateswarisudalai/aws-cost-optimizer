@@ -126,6 +126,10 @@ Each finding ships with:
 **Download** above the findings table saves exactly the rows you're looking at
 (filters apply, so pick "Safe to apply" first if that's what you're handing off):
 
+- **PDF**: a report to share — savings, current bill, "after fixes", what's safe to
+  apply now, a summary table, then one card per finding with the risk, a
+  before-you-act checklist, the fix command and Approved by / Date / Change ticket
+  lines. Opens the print dialog; choose **Save as PDF**.
 - **CSV** for Excel / Google Sheets: every field, including the recommendation,
   risks, undo steps, fix command, owner and owner's answer.
 - **Markdown**: a summary table plus one section per finding with a
