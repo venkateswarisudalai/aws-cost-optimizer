@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { idleHint } from "../lib/findingHints";
+import { regionLabel } from "../lib/regions";
 import type { Finding, RiskLevel, ScanResult } from "../lib/types";
 import { CategoryBadge } from "./CategoryBadge";
 import { CopyButton } from "./CopyButton";
@@ -37,10 +38,16 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
   const [risk, setRisk] = useState("all");
   const [q, setQ] = useState("");
 
-  const allRegions = useMemo(
-    () => Array.from(new Set(scan.findings.map((f) => f.region))).sort(),
-    [scan],
-  );
+  // Every region the scan covered (not just those with findings), plus
+  // "global" for account-wide checks, each with its finding count.
+  const regionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of scan.regions_scanned) counts.set(r, 0);
+    for (const f of scan.findings) counts.set(f.region, (counts.get(f.region) ?? 0) + 1);
+    return Array.from(counts.entries()).sort(([a], [b]) =>
+      a === "global" ? -1 : b === "global" ? 1 : a.localeCompare(b),
+    );
+  }, [scan]);
 
   const filtered = useMemo(() => {
     return scan.findings.filter((f) => {
@@ -127,10 +134,10 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
             value={region}
             onChange={(e) => setRegion(e.target.value)}
           >
-            <option value="all">All regions</option>
-            {allRegions.map((r) => (
+            <option value="all">All regions ({scan.regions_scanned.length})</option>
+            {regionCounts.map(([r, n]) => (
               <option key={r} value={r}>
-                {r}
+                {r === "global" ? "global · account-wide" : regionLabel(r)} ({n})
               </option>
             ))}
           </select>
