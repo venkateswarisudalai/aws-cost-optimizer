@@ -20,9 +20,18 @@ function ownerText(o: Owner | null | undefined): { who: string; how: string } {
 }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Asked on Slack · waiting", cls: "bg-amber-500/15 text-amber-300 ring-amber-500/30" },
-  keep: { label: "Owner: keep it", cls: "bg-sky-500/15 text-sky-300 ring-sky-500/30" },
-  delete_ok: { label: "Owner: OK to delete", cls: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" },
+  pending: {
+    label: "Asked on Slack · waiting",
+    cls: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+  },
+  keep: {
+    label: "Owner: keep it",
+    cls: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
+  },
+  delete_ok: {
+    label: "Owner: OK to delete",
+    cls: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  },
 };
 
 export function ConfirmationBadge({ c }: { c?: Confirmation }) {
@@ -44,10 +53,12 @@ export function OwnerPanel({
   f,
   confirmation,
   onAsked,
+  slackOn,
 }: {
   f: Finding;
   confirmation?: Confirmation;
   onAsked: () => void;
+  slackOn: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -81,25 +92,42 @@ export function OwnerPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <UserRound size={14} className="shrink-0 text-gray-400" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Owner</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            Owner
+          </span>
           <span className="font-medium text-gray-200">{who}</span>
           <span className="text-gray-500">· {how}</span>
         </div>
         <div className="flex items-center gap-2">
           <ConfirmationBadge c={confirmation} />
-          <button
-            onClick={ask}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 font-medium text-gray-200 transition hover:bg-white/[0.08] disabled:opacity-50"
-          >
-            {busy ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
-            {confirmation ? "Ask again on Slack" : "Ask on Slack"}
-          </button>
+          {!slackOn && (
+            <span
+              className="text-[11px] text-gray-600"
+              title="Optional — see .env.example"
+            >
+              Slack not set up
+            </span>
+          )}
+          {slackOn && (
+            <button
+              onClick={ask}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 font-medium text-gray-200 transition hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              {busy ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <MessageSquare size={12} />
+              )}
+              {confirmation ? "Ask again on Slack" : "Ask on Slack"}
+            </button>
+          )}
         </div>
       </div>
       {confirmation?.note && (
         <p className="mt-2 text-gray-400">
-          “{confirmation.note}” {confirmation.responder && <>— {confirmation.responder}</>}
+          “{confirmation.note}”{" "}
+          {confirmation.responder && <>— {confirmation.responder}</>}
         </p>
       )}
       {note && <p className="mt-2 text-gray-500">{note}</p>}

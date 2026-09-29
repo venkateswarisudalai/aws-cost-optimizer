@@ -121,7 +121,21 @@ Each finding ships with:
 - Estimated monthly savings (US-east-1 pricing)
 - Evidence (last-used timestamp, current utilization)
 
-## Ask owners on Slack
+## Download the findings
+
+**Download** above the findings table saves exactly the rows you're looking at
+(filters apply, so pick "Safe to apply" first if that's what you're handing off):
+
+- **CSV** for Excel / Google Sheets: every field, including the recommendation,
+  risks, undo steps, fix command, owner and owner's answer.
+- **Markdown**: a summary table plus one section per finding with a
+  "before you act" checklist, ready to paste into a change ticket or report.
+- **JSON** for scripts.
+
+Files are built in your browser and saved locally; nothing is uploaded. From the
+CLI, `awsco scan --json > findings.json` does the same.
+
+## Ask owners on Slack (optional)
 
 Before deleting anything, ask the person who created it. Each finding shows its
 **owner**, taken from an `Owner` / `CreatedBy` / `Team` / `Email` tag or, failing that,

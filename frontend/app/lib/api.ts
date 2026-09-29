@@ -181,3 +181,14 @@ export async function syncConfirmations(): Promise<{
   }
   return request("/confirmations/sync", { method: "POST", body: "{}" });
 }
+
+/** Whether Slack is set up. Slack is optional: without it the dashboard
+ *  still shows owners, and findings can be downloaded instead. */
+export async function slackStatus(): Promise<{ configured: boolean; demo: boolean }> {
+  if (DEMO) return { configured: false, demo: true };
+  try {
+    return await request("/slack/status");
+  } catch {
+    return { configured: false, demo: false };
+  }
+}

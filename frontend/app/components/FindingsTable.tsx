@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Clock,
+  Download,
   ListChecks,
   Lightbulb,
   ClipboardCheck,
@@ -13,8 +14,14 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { idleHint } from "../lib/findingHints";
 import { regionLabel } from "../lib/regions";
-import { listConfirmations, syncConfirmations } from "../lib/api";
-import type { Confirmation, Finding, RiskLevel, ScanResult } from "../lib/types";
+import { listConfirmations, slackStatus, syncConfirmations } from "../lib/api";
+import { downloadFindings, type ExportFormat } from "../lib/exportFindings";
+import type {
+  Confirmation,
+  Finding,
+  RiskLevel,
+  ScanResult,
+} from "../lib/types";
 import { CategoryBadge } from "./CategoryBadge";
 import { CopyButton } from "./CopyButton";
 import { ConfirmationBadge, OwnerPanel } from "./OwnerPanel";
@@ -39,15 +46,25 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
   const [category, setCategory] = useState("all");
   const [risk, setRisk] = useState("all");
   const [q, setQ] = useState("");
-  const [confirmations, setConfirmations] = useState<Record<string, Confirmation>>({});
+  const [confirmations, setConfirmations] = useState<
+    Record<string, Confirmation>
+  >({});
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+
+  // Slack is optional: the ask button only shows once it's configured (or in demo).
+  const [slackOn, setSlackOn] = useState(false);
+  useEffect(() => {
+    slackStatus().then((s) => setSlackOn(s.configured || s.demo));
+  }, []);
 
   const index = (rows: Confirmation[]) =>
     setConfirmations(Object.fromEntries(rows.map((c) => [c.finding_id, c])));
 
   const refresh = useCallback(() => {
-    listConfirmations().then(index).catch(() => {});
+    listConfirmations()
+      .then(index)
+      .catch(() => {});
   }, []);
   useEffect(refresh, [refresh, scan]);
 
@@ -68,14 +85,17 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
       setSyncing(false);
     }
   }
-  const pending = Object.values(confirmations).filter((c) => c.status === "pending").length;
+  const pending = Object.values(confirmations).filter(
+    (c) => c.status === "pending",
+  ).length;
 
   // Every region the scan covered (not just those with findings), plus
   // "global" for account-wide checks, each with its finding count.
   const regionCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of scan.regions_scanned) counts.set(r, 0);
-    for (const f of scan.findings) counts.set(f.region, (counts.get(f.region) ?? 0) + 1);
+    for (const f of scan.findings)
+      counts.set(f.region, (counts.get(f.region) ?? 0) + 1);
     return Array.from(counts.entries()).sort(([a], [b]) =>
       a === "global" ? -1 : b === "global" ? 1 : a.localeCompare(b),
     );
@@ -117,13 +137,23 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
                 disabled={syncing}
                 className="mt-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
               >
-                {syncing ? "Checking Slack…" : `Check Slack replies${pending ? ` (${pending} waiting)` : ""}`}
+                {syncing
+                  ? "Checking Slack…"
+                  : `Check Slack replies${pending ? ` (${pending} waiting)` : ""}`}
               </button>
             )}
-            {syncNote && <p className="text-[11px] text-gray-500">{syncNote}</p>}
+            {syncNote && (
+              <p className="text-[11px] text-gray-500">{syncNote}</p>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <DownloadMenu
+            count={filtered.length}
+            onPick={(fmt) =>
+              downloadFindings(fmt, scan, filtered, confirmations)
+            }
+          />
           <div className="relative">
             <Search
               size={14}
@@ -176,10 +206,13 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
             value={region}
             onChange={(e) => setRegion(e.target.value)}
           >
-            <option value="all">All regions ({scan.regions_scanned.length})</option>
+            <option value="all">
+              All regions ({scan.regions_scanned.length})
+            </option>
             {regionCounts.map(([r, n]) => (
               <option key={r} value={r}>
-                {r === "global" ? "global · account-wide" : regionLabel(r)} ({n})
+                {r === "global" ? "global · account-wide" : regionLabel(r)} ({n}
+                )
               </option>
             ))}
           </select>
@@ -206,11 +239,15 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
                 f={f}
                 confirmation={confirmations[f.id]}
                 onAsked={refresh}
+                slackOn={slackOn}
               />
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
+                <td
+                  colSpan={7}
+                  className="px-5 py-10 text-center text-sm text-gray-500"
+                >
                   No findings match the current filters.
                 </td>
               </tr>
@@ -235,88 +272,105 @@ function FindingRow({
   f,
   confirmation,
   onAsked,
+  slackOn,
 }: {
   f: Finding;
   confirmation?: Confirmation;
   onAsked: () => void;
+  slackOn: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <Fragment>
-    <tr
-      className={`group cursor-pointer transition-colors hover:bg-white/[0.025] ${open ? "bg-white/[0.025]" : ""}`}
-      onClick={() => setOpen((o) => !o)}
-    >
-      <td className="py-3 pl-4 align-top">
-        <button
-          aria-expanded={open}
-          aria-label={open ? "Hide guidance" : "Show guidance"}
-          className="rounded p-0.5 text-gray-500 hover:text-gray-200"
-        >
-          <ChevronRight
-            size={15}
-            className={`transition-transform ${open ? "rotate-90" : ""}`}
-          />
-        </button>
-      </td>
-      <td className="px-3 py-3 align-top">
-        <SeverityBadge severity={f.severity} />
-      </td>
-      <td
-        className={`whitespace-nowrap px-3 py-3 text-right align-top font-medium tabular-nums ${
-          f.superseded_by ? "text-gray-500 line-through decoration-gray-600" : "text-emerald-400"
-        }`}
-        title={f.superseded_by ? "Alternative option — not counted in totals" : undefined}
+      <tr
+        className={`group cursor-pointer transition-colors hover:bg-white/[0.025] ${open ? "bg-white/[0.025]" : ""}`}
+        onClick={() => setOpen((o) => !o)}
       >
-        {fmtMoney(f.monthly_savings_usd)}
-      </td>
-      <td className="px-3 py-3 align-top">
-        <div className="flex flex-col">
-          <span className="font-medium text-gray-100">{f.title}</span>
-          <span className="mt-0.5 max-w-md truncate text-xs text-gray-500">
-            {f.description}
-          </span>
-          <span className="mt-1 flex items-center gap-2">
-            <CategoryBadge category={f.category} />
-            {/* Commitment / anomaly categories already say what the risk badge would. */}
-            {f.category !== "commitment" && f.category !== "anomaly" && (
-              <RiskBadge level={riskOf(f)} />
+        <td className="py-3 pl-4 align-top">
+          <button
+            aria-expanded={open}
+            aria-label={open ? "Hide guidance" : "Show guidance"}
+            className="rounded p-0.5 text-gray-500 hover:text-gray-200"
+          >
+            <ChevronRight
+              size={15}
+              className={`transition-transform ${open ? "rotate-90" : ""}`}
+            />
+          </button>
+        </td>
+        <td className="px-3 py-3 align-top">
+          <SeverityBadge severity={f.severity} />
+        </td>
+        <td
+          className={`whitespace-nowrap px-3 py-3 text-right align-top font-medium tabular-nums ${
+            f.superseded_by
+              ? "text-gray-500 line-through decoration-gray-600"
+              : "text-emerald-400"
+          }`}
+          title={
+            f.superseded_by
+              ? "Alternative option — not counted in totals"
+              : undefined
+          }
+        >
+          {fmtMoney(f.monthly_savings_usd)}
+        </td>
+        <td className="px-3 py-3 align-top">
+          <div className="flex flex-col">
+            <span className="font-medium text-gray-100">{f.title}</span>
+            <span className="mt-0.5 max-w-md truncate text-xs text-gray-500">
+              {f.description}
+            </span>
+            <span className="mt-1 flex items-center gap-2">
+              <CategoryBadge category={f.category} />
+              {/* Commitment / anomaly categories already say what the risk badge would. */}
+              {f.category !== "commitment" && f.category !== "anomaly" && (
+                <RiskBadge level={riskOf(f)} />
+              )}
+              <ConfirmationBadge c={confirmation} />
+              <span className="font-mono text-[11px] text-gray-600">
+                {f.check_id}
+              </span>
+            </span>
+            {f.superseded_by && (
+              <span className="mt-1 text-xs text-gray-500">
+                Alternative to a bigger saving on the same resource — not added
+                to totals
+              </span>
             )}
-            <ConfirmationBadge c={confirmation} />
-            <span className="font-mono text-[11px] text-gray-600">
-              {f.check_id}
-            </span>
-          </span>
-          {f.superseded_by && (
-            <span className="mt-1 text-xs text-gray-500">
-              Alternative to a bigger saving on the same resource — not added to totals
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="whitespace-nowrap px-3 py-3 align-top font-mono text-xs text-gray-400">
-        {f.region}
-      </td>
-      <td className="whitespace-nowrap px-3 py-3 align-top">
-        <IdleCell f={f} />
-      </td>
-      <td className="px-3 py-3 align-top" onClick={(e) => e.stopPropagation()}>
-        <CopyButton text={f.cli_fix_command} />
-      </td>
-    </tr>
-    {open && (
-      <tr className="bg-white/[0.015]">
-        <td />
-        <td colSpan={6} className="px-3 pb-5 pt-1">
-          <GuidancePanel f={f} />
-          {f.category !== "commitment" && f.category !== "anomaly" && (
-            <div className="sticky left-0 mt-3 w-[min(44rem,calc(100vw-5rem))]">
-              <OwnerPanel f={f} confirmation={confirmation} onAsked={onAsked} />
-            </div>
-          )}
+          </div>
+        </td>
+        <td className="whitespace-nowrap px-3 py-3 align-top font-mono text-xs text-gray-400">
+          {f.region}
+        </td>
+        <td className="whitespace-nowrap px-3 py-3 align-top">
+          <IdleCell f={f} />
+        </td>
+        <td
+          className="px-3 py-3 align-top"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <CopyButton text={f.cli_fix_command} />
         </td>
       </tr>
-    )}
+      {open && (
+        <tr className="bg-white/[0.015]">
+          <td />
+          <td colSpan={6} className="px-3 pb-5 pt-1">
+            <GuidancePanel f={f} />
+            {f.category !== "commitment" && f.category !== "anomaly" && (
+              <div className="sticky left-0 mt-3 w-[min(44rem,calc(100vw-5rem))]">
+                <OwnerPanel
+                  f={f}
+                  confirmation={confirmation}
+                  onAsked={onAsked}
+                  slackOn={slackOn}
+                />
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
     </Fragment>
   );
 }
@@ -328,22 +382,37 @@ function GuidancePanel({ f }: { f: Finding }) {
       <p className="text-xs leading-relaxed text-gray-400">{f.description}</p>
       {!g ? (
         <p className="text-xs text-gray-500">
-          Detailed guidance isn&apos;t available for this finding. Run a new scan to get it.
+          Detailed guidance isn&apos;t available for this finding. Run a new
+          scan to get it.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          <Section icon={<Lightbulb size={14} className="text-emerald-400" />} title="Recommendation">
+          <Section
+            icon={<Lightbulb size={14} className="text-emerald-400" />}
+            title="Recommendation"
+          >
             <p className="text-gray-200">{g.recommendation}</p>
           </Section>
-          <Section icon={<AlertTriangle size={14} className="text-rose-400" />} title="Risk">
+          <Section
+            icon={<AlertTriangle size={14} className="text-rose-400" />}
+            title="Risk"
+          >
             <List items={g.risks} />
           </Section>
-          <Section icon={<ClipboardCheck size={14} className="text-sky-400" />} title="Before you act">
+          <Section
+            icon={<ClipboardCheck size={14} className="text-sky-400" />}
+            title="Before you act"
+          >
             <List items={g.before_you_act} />
           </Section>
-          <Section icon={<Undo2 size={14} className="text-amber-400" />} title="How to undo">
+          <Section
+            icon={<Undo2 size={14} className="text-amber-400" />}
+            title="How to undo"
+          >
             <p className={g.reversible ? "text-gray-300" : "text-rose-300"}>
-              {!g.reversible && <span className="font-semibold">Not reversible. </span>}
+              {!g.reversible && (
+                <span className="font-semibold">Not reversible. </span>
+              )}
               <Rich text={g.undo} />
             </p>
           </Section>
@@ -352,9 +421,12 @@ function GuidancePanel({ f }: { f: Finding }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/5 pt-3 text-xs text-gray-500">
         <span>
           Confidence: <span className="text-gray-300">{f.confidence}</span>
-          {f.confidence !== "high" && " · check it's really unused before acting"}
+          {f.confidence !== "high" &&
+            " · check it's really unused before acting"}
         </span>
-        <span className="font-mono text-[11px] text-gray-600">{f.resource_arn}</span>
+        <span className="font-mono text-[11px] text-gray-600">
+          {f.resource_arn}
+        </span>
       </div>
     </div>
   );
@@ -421,5 +493,52 @@ function IdleCell({ f }: { f: Finding }) {
       <Clock size={11} className="text-gray-500" />
       {hint}
     </span>
+  );
+}
+
+const FORMATS: { fmt: ExportFormat; label: string; hint: string }[] = [
+  { fmt: "csv", label: "CSV", hint: "Excel / Google Sheets" },
+  { fmt: "md", label: "Markdown", hint: "change ticket / report" },
+  { fmt: "json", label: "JSON", hint: "scripts" },
+];
+
+/** Exports exactly the rows currently shown, so filter first. */
+function DownloadMenu({
+  count,
+  onPick,
+}: {
+  count: number;
+  onPick: (f: ExportFormat) => void;
+}) {
+  return (
+    <details className="group relative">
+      <summary
+        className={`${selectCls} flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden`}
+      >
+        <Download size={14} className="text-gray-400" />
+        Download
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-60 overflow-hidden rounded-lg border border-white/10 bg-gray-950 shadow-xl">
+        <p className="border-b border-white/10 px-3 py-2 text-[11px] text-gray-500">
+          {count} finding{count === 1 ? "" : "s"} shown (filters apply)
+        </p>
+        {FORMATS.map(({ fmt, label, hint }) => (
+          <button
+            key={fmt}
+            disabled={count === 0}
+            onClick={(e) => {
+              onPick(fmt);
+              (
+                e.currentTarget.closest("details") as HTMLDetailsElement | null
+              )?.removeAttribute("open");
+            }}
+            className="flex w-full items-baseline justify-between px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/5 disabled:opacity-40"
+          >
+            {label}
+            <span className="text-[11px] text-gray-500">{hint}</span>
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
