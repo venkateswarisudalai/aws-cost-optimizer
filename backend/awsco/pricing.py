@@ -11,6 +11,12 @@ EBS_IO1_GB_MONTH = 0.125
 EBS_ST1_GB_MONTH = 0.045
 EBS_SC1_GB_MONTH = 0.015
 
+# Provisioned IOPS ($/IOPS-month). gp3 includes 3,000 IOPS; io1 bills every one.
+EBS_IO1_IOPS_MONTH = 0.065
+EBS_GP3_IOPS_MONTH = 0.005
+GP3_BASELINE_IOPS = 3000
+GP3_MAX_IOPS = 16000
+
 # Snapshots ($/GB-month, standard tier)
 EBS_SNAPSHOT_GB_MONTH = 0.05
 
@@ -44,6 +50,14 @@ S3_STANDARD_GB_MONTH = 0.023
 DYNAMODB_RCU_HOURLY = 0.00013
 DYNAMODB_WCU_HOURLY = 0.00065
 
+# Networking ($/hour -> monthly). Interface endpoints bill per AZ.
+VPC_INTERFACE_ENDPOINT_AZ_MONTHLY = round(0.01 * 24 * 30, 2)  # ~$7.20
+TGW_ATTACHMENT_MONTHLY = round(0.05 * 24 * 30, 2)  # ~$36.00
+VPN_CONNECTION_MONTHLY = round(0.05 * 24 * 30, 2)  # ~$36.00
+
+# Secrets Manager ($/secret-month).
+SECRETS_MANAGER_SECRET_MONTH = 0.40
+
 HOURS_PER_MONTH = 24 * 30
 
 
@@ -71,3 +85,13 @@ def ebs_volume_monthly_cost(volume_type: str, size_gb: int) -> float:
 def gp2_to_gp3_monthly_savings(size_gb: int) -> float:
     """gp3 is 20% cheaper than gp2 at the same size."""
     return round((EBS_GP2_GB_MONTH - EBS_GP3_GB_MONTH) * size_gb, 2)
+
+
+def io1_monthly_cost(size_gb: int, iops: int) -> float:
+    return round(EBS_IO1_GB_MONTH * size_gb + EBS_IO1_IOPS_MONTH * iops, 2)
+
+
+def gp3_monthly_cost(size_gb: int, iops: int) -> float:
+    """gp3 at the same IOPS (throughput left at the free 125 MB/s baseline)."""
+    extra_iops = max(0, iops - GP3_BASELINE_IOPS)
+    return round(EBS_GP3_GB_MONTH * size_gb + EBS_GP3_IOPS_MONTH * extra_iops, 2)

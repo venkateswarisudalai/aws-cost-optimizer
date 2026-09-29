@@ -11,12 +11,11 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import HOURS_PER_MONTH
 
 CHECK_ID = "elasticache.idle"
-LOOKBACK_DAYS = 7
 CPU_IDLE_THRESHOLD_PCT = 2.0
 
 # Conservative on-demand node hourly prices (USD, us-east-1).
@@ -33,7 +32,7 @@ DEFAULT_HOURLY = 0.05
 
 def _max_cpu(cw, cluster_id: str) -> float | None:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace="AWS/ElastiCache",
         MetricName="CPUUtilization",
@@ -94,7 +93,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 ),
                 description=(
                     f"Cluster {cluster_id} peaked at only {max_cpu:.1f}% CPU over the "
-                    f"last {LOOKBACK_DAYS} days. If nothing depends on it, delete it; "
+                    f"last {lookback_days()} days. If nothing depends on it, delete it; "
                     "otherwise downsize the node type."
                 ),
                 service="elasticache",

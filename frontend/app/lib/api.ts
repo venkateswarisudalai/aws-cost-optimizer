@@ -49,12 +49,16 @@ export async function runScan(opts?: {
   profile?: string | null;
   regions?: string[] | null;
   credentials?: AwsCredentials | null;
+  expectedAccountId?: string | null;
+  lookbackDays?: number;
 }): Promise<ScanResult> {
   if (DEMO) return demoScan(opts?.regions ?? null);
   const body: Record<string, unknown> = {};
   if (opts?.profile) body.profile = opts.profile;
   if (opts?.regions?.length) body.regions = opts.regions;
   if (opts?.credentials) body.credentials = opts.credentials;
+  if (opts?.expectedAccountId) body.expected_account_id = opts.expectedAccountId;
+  if (opts?.lookbackDays) body.lookback_days = opts.lookbackDays;
   return request<ScanResult>("/scan", {
     method: "POST",
     body: JSON.stringify(body),
@@ -89,18 +93,21 @@ export async function listRegions(
 export async function validateConnection(input: {
   profile?: string | null;
   credentials?: AwsCredentials | null;
+  expectedAccountId?: string | null;
 }): Promise<ValidateResult> {
   if (DEMO) {
     return {
       account_id: "123456789012",
       arn: "arn:aws:iam::123456789012:user/demo",
       regions: demoRegions,
+      warnings: [],
       demo: true,
     };
   }
   const body: Record<string, unknown> = {};
   if (input.profile) body.profile = input.profile;
   if (input.credentials) body.credentials = input.credentials;
+  if (input.expectedAccountId) body.expected_account_id = input.expectedAccountId;
   return request<ValidateResult>("/aws/validate", {
     method: "POST",
     body: JSON.stringify(body),

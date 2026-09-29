@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   KeyRound,
+  TriangleAlert,
   Loader2,
   Search,
   ShieldCheck,
@@ -23,6 +24,11 @@ export interface ConnectSelection {
   enabledRegions: string[]; // every region activated on the account (switcher universe)
   accountId: string | null;
   arn?: string | null;
+  // Account ID the user typed; every scan is refused if the keys resolve to a
+  // different account (guards against a stray profile / wrong key pair).
+  expectedAccountId?: string | null;
+  // Days of CloudWatch history the idle checks use (7–60).
+  lookbackDays?: number;
 }
 
 interface Props {
@@ -49,9 +55,16 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
   const [sessionToken, setSessionToken] = useState("");
   const [showSecret, setShowSecret] = useState(false);
 
+  // optional "this must be account X" guard
+  const [expectedAccountId, setExpectedAccountId] = useState(
+    initial?.expectedAccountId ?? "",
+  );
+
   // validation result + region selection
   const [accountId, setAccountId] = useState<string | null>(null);
   const [arn, setArn] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [lookbackDays, setLookbackDays] = useState(initial?.lookbackDays ?? 30);
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [regionFilter, setRegionFilter] = useState("");
@@ -71,6 +84,8 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
     setShowSecret(false);
     setAccountId(null);
     setArn(null);
+    setWarnings([]);
+    setExpectedAccountId(initial?.expectedAccountId ?? "");
     setRegions([]);
     setSelected(new Set(initial?.regions ?? []));
     setRegionFilter("");
@@ -95,8 +110,12 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
     };
   }, [mode, accessKeyId, secretAccessKey, sessionToken]);
 
+  const typedAccount = expectedAccountId.replace(/[\s-]/g, "");
+  const accountIdValid = typedAccount === "" || /^\d{12}$/.test(typedAccount);
+
   const canTest =
     !busy &&
+    accountIdValid &&
     (mode === "profile" ? !!profile : !!credentials);
 
   async function test() {
@@ -106,9 +125,11 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
       const res = await validateConnection({
         profile: mode === "profile" ? profile : null,
         credentials: mode === "keys" ? credentials : null,
+        expectedAccountId: typedAccount || null,
       });
       setAccountId(res.account_id);
       setArn(res.arn);
+      setWarnings(res.warnings ?? []);
       setRegions(res.regions);
       // Only activated regions are scannable. Preselect those (or restore the
       // prior selection if it still applies to this account).
@@ -152,6 +173,8 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
       enabledRegions: regions.filter((r) => r.enabled).map((r) => r.name),
       accountId,
       arn,
+      expectedAccountId: typedAccount || null,
+      lookbackDays,
     });
   }
 
@@ -217,6 +240,31 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                   setError(null);
                 }}
               />
+            </div>
+
+            <div>
+              <Label>
+                AWS account ID{" "}
+                <span className="font-normal text-gray-600">(recommended)</span>
+              </Label>
+              <Input
+                placeholder="123456789012"
+                value={expectedAccountId}
+                onChange={setExpectedAccountId}
+                mono
+              />
+              <Hint>
+                {accountIdValid ? (
+                  <>
+                    Scans are refused if the credentials belong to any other
+                    account, so a stray profile can&apos;t hit the wrong one.
+                  </>
+                ) : (
+                  <span className="text-rose-300">
+                    An AWS account ID is exactly 12 digits.
+                  </span>
+                )}
+              </Hint>
             </div>
 
             {mode === "profile" ? (
@@ -292,7 +340,10 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                 </div>
                 <Hint>
                   Sent only to the local backend on this machine, kept in memory
-                  for this session, and never written to disk.
+                  for this session, and never written to disk. Use keys for an
+                  IAM user with the read-only{" "}
+                  <Mono>infra/iam-policy.json</Mono>. Temporary keys (ASIA…) are
+                  safest.
                 </Hint>
               </div>
             )}
@@ -315,6 +366,16 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                 <p className="truncate font-mono text-xs text-gray-500">{arn}</p>
               </div>
             </div>
+
+            {warnings.map((w) => (
+              <div
+                key={w}
+                className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-200"
+              >
+                <TriangleAlert size={14} className="mt-0.5 shrink-0 text-amber-400" />
+                <span>{w}</span>
+              </div>
+            ))}
 
             <div>
               <div className="flex items-baseline justify-between">
@@ -420,6 +481,29 @@ export function ConnectModal({ open, initial, onCancel, onConfirm }: Props) {
                     on this account (shown as <span className="text-gray-400">off</span>).
                   </>
                 )}
+              </Hint>
+            </div>
+
+            <div>
+              <Label>Idle lookback</Label>
+              <div className="grid grid-cols-4 gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                {[7, 14, 30, 60].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setLookbackDays(d)}
+                    className={`rounded-md py-1.5 text-xs font-medium transition ${
+                      lookbackDays === d
+                        ? "bg-emerald-500/15 text-emerald-300"
+                        : "text-gray-400 hover:bg-white/5"
+                    }`}
+                  >
+                    {d} days
+                  </button>
+                ))}
+              </div>
+              <Hint>
+                How much CloudWatch history decides that something is idle. 7 days
+                misses monthly jobs; use 30+ before deleting anything.
               </Hint>
             </div>
 

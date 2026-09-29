@@ -1,5 +1,6 @@
 import { Clock, MapPin, TrendingDown, Wallet } from "lucide-react";
 import type { ScanResult } from "../lib/types";
+import { countedSavings } from "../lib/savings";
 
 function fmtMoney(usd: number, maxFrac = 0): string {
   return usd.toLocaleString("en-US", {
@@ -28,7 +29,7 @@ export function KpiCards({
   selectedRegion?: string;
 }) {
   const totalSavings = scan.findings.reduce(
-    (acc, f) => acc + f.monthly_savings_usd,
+    (acc, f) => acc + countedSavings(f),
     0,
   );
   const high = scan.findings.filter((f) => f.severity === "high").length;

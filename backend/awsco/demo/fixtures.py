@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from awsco.models import Category, Confidence, Finding, ScanResult, Severity
+from awsco.guidance import attach_guidance
+from awsco.scanner import mark_overlaps, roll_up_vpcs
 
 
 def _f(
@@ -40,6 +42,28 @@ def _f(
         fix_destructive=destructive,
         evidence=evidence,
     )
+
+
+DEMO_SPEND = {
+    "period_start": "2026-05-02",
+    "period_end": "2026-06-01",
+    "total_30d_usd": 4812.37,
+    "by_service": [
+        {"service": "Amazon Elastic Compute Cloud - Compute", "cost_usd": 1896.20},
+        {"service": "Amazon Relational Database Service", "cost_usd": 902.14},
+        {"service": "EC2 - Other", "cost_usd": 611.08},
+        {"service": "Amazon Simple Storage Service", "cost_usd": 488.51},
+        {"service": "Amazon Virtual Private Cloud", "cost_usd": 263.40},
+        {"service": "Amazon ElastiCache", "cost_usd": 214.66},
+        {"service": "AmazonCloudWatch", "cost_usd": 176.93},
+        {"service": "Elastic Load Balancing", "cost_usd": 121.50},
+        {"service": "Other", "cost_usd": 137.95},
+    ],
+    "month_to_date_usd": 4812.37,
+    "forecast_month_usd": 4990.00,
+    "currency": "USD",
+    "source": "cost-explorer",
+}
 
 
 def build_demo_scan() -> ScanResult:
@@ -305,6 +329,63 @@ def build_demo_scan() -> ScanResult:
             },
             category=Category.ANOMALY,
         ),
+        # --- Networking -------------------------------------------------------
+        _f(
+            "vpc.endpoint-idle", "Idle interface endpoint vpce-0staging01 (ecr.dkr, 3 AZ)",
+            "This PrivateLink endpoint for com.amazonaws.us-east-1.ecr.dkr processed no "
+            "traffic over 7 days but bills ~$21.60/mo ($7.20 per AZ).",
+            "vpc", "us-east-1", "vpce-0staging01", 21.60, Confidence.MEDIUM,
+            "aws ec2 delete-vpc-endpoints --region us-east-1 --vpc-endpoint-ids vpce-0staging01",
+            False, {
+                "vpc_id": "vpc-0staging", "service_name": "com.amazonaws.us-east-1.ecr.dkr",
+                "availability_zones": 3, "bytes_processed": 0, "metrics_found": True,
+                "private_dns_enabled": True,
+            },
+        ),
+        _f(
+            "vpc.abandoned", "VPC 'staging-2024' looks abandoned — ~$73.80/mo in leftover "
+            "infrastructure",
+            "No workload runs in vpc-0staging (no instances, Lambda functions, databases or "
+            "containers), and its 4 billable resources (application-load-balancer, "
+            "interface-endpoint, nat-gateway, public-ipv4) moved almost no traffic over 7 "
+            "days. CloudTrail shows no activity on it in that time. Tearing it down removes "
+            "the whole bill for this VPC.",
+            "vpc", "us-east-1", "vpc-0staging", 73.80, Confidence.MEDIUM,
+            "aws ec2 delete-vpc-endpoints --region us-east-1 --vpc-endpoint-ids vpce-0staging01\n"
+            "aws elbv2 delete-load-balancer --region us-east-1 --load-balancer-arn "
+            "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/staging-old-alb/x\n"
+            "aws ec2 delete-nat-gateway --region us-east-1 --nat-gateway-id nat-0a1b2c3d4e5f6\n"
+            "# finally: aws ec2 delete-vpc --region us-east-1 --vpc-id vpc-0staging",
+            True, {
+                "vpc_name": "staging-2024", "cidr": "10.20.0.0/16",
+                "members": [
+                    {"type": "nat-gateway", "id": "nat-0a1b2c3d4e5f6", "monthly_usd": 32.40},
+                    {"type": "application-load-balancer", "id": "staging-old-alb",
+                     "monthly_usd": 16.20},
+                    {"type": "interface-endpoint", "id": "vpce-0staging01", "monthly_usd": 21.60},
+                    {"type": "public-ipv4", "id": "54.10.20.30", "monthly_usd": 3.60},
+                ],
+                "member_resource_ids": ["nat-0a1b2c3d4e5f6", "staging-old-alb",
+                                        "vpce-0staging01", "54.10.20.30"],
+                "traffic_bytes": 0, "network_interfaces_in_use": 5,
+                "last_cloudtrail_event": None, "active_peering_connections": [],
+                "tgw_attachments": [], "flow_logs_enabled": False,
+            },
+        ),
+        _f(
+            "sg.unused", "Unused security group 'old-bastion' (sg-0bastion) — open to the "
+            "internet on tcp/22",
+            "Not attached to any network interface and not referenced by another group. It "
+            "costs nothing, but unused groups get reattached by mistake — and this one allows "
+            "inbound traffic from anywhere.",
+            "ec2", "us-east-1", "sg-0bastion", 0.0, Confidence.MEDIUM,
+            "aws ec2 delete-security-group --region us-east-1 --group-id sg-0bastion",
+            False, {
+                "vpc_id": "vpc-0prod", "group_name": "old-bastion", "inbound_rules": 1,
+                "outbound_rules": 1, "open_to_world": ["tcp/22"],
+            },
+            category=Category.HYGIENE,
+        ),
     ]
 
     return ScanResult(
@@ -313,6 +394,9 @@ def build_demo_scan() -> ScanResult:
         started_at=now - timedelta(seconds=12),
         finished_at=now,
         regions_scanned=["us-east-1", "us-west-2", "eu-west-1"],
-        findings=sorted(findings, key=lambda f: -f.monthly_savings_usd),
+        findings=attach_guidance(
+            roll_up_vpcs(mark_overlaps(sorted(findings, key=lambda f: -f.monthly_savings_usd)))
+        ),
         is_demo=True,
+        spend=DEMO_SPEND,
     )

@@ -12,12 +12,11 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import HOURS_PER_MONTH
 
 CHECK_ID = "redshift.idle"
-LOOKBACK_DAYS = 7
 
 # Conservative on-demand node hourly prices (USD, us-east-1).
 NODE_HOURLY = {
@@ -30,7 +29,7 @@ DEFAULT_HOURLY = 0.25
 
 def _max_connections(cw, cluster_id: str) -> float | None:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace="AWS/Redshift",
         MetricName="DatabaseConnections",
@@ -88,7 +87,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 ),
                 description=(
                     f"Cluster {cluster_id} had zero database connections over the last "
-                    f"{LOOKBACK_DAYS} days. Pause it (billing stops while paused) or "
+                    f"{lookback_days()} days. Pause it (billing stops while paused) or "
                     "delete it with a final snapshot."
                 ),
                 service="redshift",

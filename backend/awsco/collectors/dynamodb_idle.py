@@ -12,18 +12,17 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import dynamodb_provisioned_monthly_cost
 
 CHECK_ID = "dynamodb.idle-provisioned"
-LOOKBACK_DAYS = 7
 CONSUMED_THRESHOLD = 100.0  # total consumed units over 7d below this == idle
 
 
 def _consumed(cw, table: str, metric: str) -> float:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace="AWS/DynamoDB",
         MetricName=metric,
@@ -94,7 +93,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 ),
                 description=(
                     f"Table '{name}' is on PROVISIONED billing but consumed only "
-                    f"{int(consumed)} capacity units over the last {LOOKBACK_DAYS} days. "
+                    f"{int(consumed)} capacity units over the last {lookback_days()} days. "
                     "Switch it to on-demand (PAY_PER_REQUEST) so you pay per request "
                     "instead of for idle reserved capacity. (GSIs not counted, so real "
                     "savings may be higher.)"

@@ -1,11 +1,21 @@
 "use client";
 
-import { AlertTriangle, Clock, ListChecks, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  Clock,
+  ListChecks,
+  Lightbulb,
+  ClipboardCheck,
+  Search,
+  Undo2,
+} from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
 import { idleHint } from "../lib/findingHints";
-import type { Finding, ScanResult } from "../lib/types";
+import type { Finding, RiskLevel, ScanResult } from "../lib/types";
 import { CategoryBadge } from "./CategoryBadge";
 import { CopyButton } from "./CopyButton";
+import { RiskBadge } from "./RiskBadge";
 import { SeverityBadge } from "./SeverityBadge";
 
 function fmtMoney(n: number): string {
@@ -24,6 +34,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
   const [severity, setSeverity] = useState("all");
   const [region, setRegion] = useState("all");
   const [category, setCategory] = useState("all");
+  const [risk, setRisk] = useState("all");
   const [q, setQ] = useState("");
 
   const allRegions = useMemo(
@@ -37,6 +48,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
       if (region !== "all" && f.region !== region) return false;
       if (category !== "all" && (f.category ?? "waste") !== category)
         return false;
+      if (risk !== "all" && riskOf(f) !== risk) return false;
       if (
         q &&
         !`${f.title} ${f.check_id} ${f.resource_id}`
@@ -46,7 +58,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
         return false;
       return true;
     });
-  }, [scan, severity, region, category, q]);
+  }, [scan, severity, region, category, risk, q]);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.02]">
@@ -85,6 +97,20 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
             <option value="rightsizing">Rightsizing</option>
             <option value="commitment">Commitment (RI/SP)</option>
             <option value="anomaly">Anomaly</option>
+            <option value="hygiene">Hygiene ($0, security)</option>
+          </select>
+          <select
+            className={selectCls}
+            value={risk}
+            onChange={(e) => setRisk(e.target.value)}
+            aria-label="Filter by risk"
+          >
+            <option value="all">All risk levels</option>
+            <option value="safe">Safe to apply</option>
+            <option value="restart">Needs restart</option>
+            <option value="destructive">Deletes data</option>
+            <option value="commitment">Commitment</option>
+            <option value="info">Investigate</option>
           </select>
           <select
             className={selectCls}
@@ -115,7 +141,8 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-5 py-3 font-medium">Sev</th>
+              <th className="w-8 py-3 pl-4" aria-label="Expand" />
+              <th className="px-3 py-3 font-medium">Sev</th>
               <th className="px-3 py-3 text-right font-medium">$ / mo</th>
               <th className="px-3 py-3 font-medium">Finding</th>
               <th className="px-3 py-3 font-medium">Region</th>
@@ -129,7 +156,7 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">
+                <td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
                   No findings match the current filters.
                 </td>
               </tr>
@@ -141,13 +168,44 @@ export function FindingsTable({ scan }: { scan: ScanResult }) {
   );
 }
 
+/** Risk level from the server's guidance, or a conservative fallback for scans
+ *  saved before guidance existed. */
+function riskOf(f: Finding): RiskLevel {
+  if (f.guidance) return f.guidance.risk_level;
+  if (f.category === "commitment") return "commitment";
+  if (f.category === "anomaly") return "info";
+  return f.fix_destructive ? "destructive" : "restart";
+}
+
 function FindingRow({ f }: { f: Finding }) {
+  const [open, setOpen] = useState(false);
   return (
-    <tr className="group transition-colors hover:bg-white/[0.025]">
-      <td className="px-5 py-3 align-top">
+    <Fragment>
+    <tr
+      className={`group cursor-pointer transition-colors hover:bg-white/[0.025] ${open ? "bg-white/[0.025]" : ""}`}
+      onClick={() => setOpen((o) => !o)}
+    >
+      <td className="py-3 pl-4 align-top">
+        <button
+          aria-expanded={open}
+          aria-label={open ? "Hide guidance" : "Show guidance"}
+          className="rounded p-0.5 text-gray-500 hover:text-gray-200"
+        >
+          <ChevronRight
+            size={15}
+            className={`transition-transform ${open ? "rotate-90" : ""}`}
+          />
+        </button>
+      </td>
+      <td className="px-3 py-3 align-top">
         <SeverityBadge severity={f.severity} />
       </td>
-      <td className="whitespace-nowrap px-3 py-3 text-right align-top font-medium tabular-nums text-emerald-400">
+      <td
+        className={`whitespace-nowrap px-3 py-3 text-right align-top font-medium tabular-nums ${
+          f.superseded_by ? "text-gray-500 line-through decoration-gray-600" : "text-emerald-400"
+        }`}
+        title={f.superseded_by ? "Alternative option — not counted in totals" : undefined}
+      >
         {fmtMoney(f.monthly_savings_usd)}
       </td>
       <td className="px-3 py-3 align-top">
@@ -158,14 +216,17 @@ function FindingRow({ f }: { f: Finding }) {
           </span>
           <span className="mt-1 flex items-center gap-2">
             <CategoryBadge category={f.category} />
+            {/* Commitment / anomaly categories already say what the risk badge would. */}
+            {f.category !== "commitment" && f.category !== "anomaly" && (
+              <RiskBadge level={riskOf(f)} />
+            )}
             <span className="font-mono text-[11px] text-gray-600">
               {f.check_id}
             </span>
           </span>
-          {f.fix_destructive && (
-            <span className="mt-1 inline-flex items-center gap-1 text-xs text-amber-400">
-              <AlertTriangle size={11} />
-              Fix deletes data — verify before running
+          {f.superseded_by && (
+            <span className="mt-1 text-xs text-gray-500">
+              Alternative to a bigger saving on the same resource — not added to totals
             </span>
           )}
         </div>
@@ -176,10 +237,111 @@ function FindingRow({ f }: { f: Finding }) {
       <td className="whitespace-nowrap px-3 py-3 align-top">
         <IdleCell f={f} />
       </td>
-      <td className="px-3 py-3 align-top">
+      <td className="px-3 py-3 align-top" onClick={(e) => e.stopPropagation()}>
         <CopyButton text={f.cli_fix_command} />
       </td>
     </tr>
+    {open && (
+      <tr className="bg-white/[0.015]">
+        <td />
+        <td colSpan={6} className="px-3 pb-5 pt-1">
+          <GuidancePanel f={f} />
+        </td>
+      </tr>
+    )}
+    </Fragment>
+  );
+}
+
+function GuidancePanel({ f }: { f: Finding }) {
+  const g = f.guidance;
+  return (
+    <div className="sticky left-0 w-[min(44rem,calc(100vw-5rem))] space-y-4 rounded-xl border border-white/10 bg-gray-950/60 p-4 text-sm">
+      <p className="text-xs leading-relaxed text-gray-400">{f.description}</p>
+      {!g ? (
+        <p className="text-xs text-gray-500">
+          Detailed guidance isn&apos;t available for this finding. Run a new scan to get it.
+        </p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Section icon={<Lightbulb size={14} className="text-emerald-400" />} title="Recommendation">
+            <p className="text-gray-200">{g.recommendation}</p>
+          </Section>
+          <Section icon={<AlertTriangle size={14} className="text-rose-400" />} title="Risk">
+            <List items={g.risks} />
+          </Section>
+          <Section icon={<ClipboardCheck size={14} className="text-sky-400" />} title="Before you act">
+            <List items={g.before_you_act} />
+          </Section>
+          <Section icon={<Undo2 size={14} className="text-amber-400" />} title="How to undo">
+            <p className={g.reversible ? "text-gray-300" : "text-rose-300"}>
+              {!g.reversible && <span className="font-semibold">Not reversible. </span>}
+              <Rich text={g.undo} />
+            </p>
+          </Section>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/5 pt-3 text-xs text-gray-500">
+        <span>
+          Confidence: <span className="text-gray-300">{f.confidence}</span>
+          {f.confidence !== "high" && " · check it's really unused before acting"}
+        </span>
+        <span className="font-mono text-[11px] text-gray-600">{f.resource_arn}</span>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        {icon}
+        {title}
+      </div>
+      <div className="text-xs leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+function List({ items }: { items: string[] }) {
+  return (
+    <ul className="list-disc space-y-1 pl-4 text-gray-300 marker:text-gray-600">
+      {items.map((t) => (
+        <li key={t}>
+          <Rich text={t} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Render `backtick` spans as inline code so commands stand out. */
+function Rich({ text }: { text: string }) {
+  const parts = text.split(/`([^`]+)`/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <code
+            key={i}
+            className="break-all rounded bg-white/5 px-1 py-0.5 font-mono text-[11px] text-gray-200"
+          >
+            {p}
+          </code>
+        ) : (
+          <Fragment key={i}>{p}</Fragment>
+        ),
+      )}
+    </>
   );
 }
 

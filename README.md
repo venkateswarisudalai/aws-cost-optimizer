@@ -67,6 +67,20 @@ awsco serve              # dashboard at http://localhost:3000
 | Unused ALB/NLB (no targets or 0 reqs) | ~$16/mo each | High |
 | gp2 volumes that should be gp3 | 20% on EBS storage | High |
 | CloudWatch Log groups without retention | grows unbounded | High |
+| io1 volumes gp3 can serve (≤16k IOPS) | often 60–80% of the volume | High |
+| Secrets Manager secrets unread for 90+ days | $0.40/mo each | Medium |
+| Idle interface VPC endpoints (PrivateLink) | ~$7.20/mo per AZ each | Medium |
+| Idle Transit Gateway attachments | ~$36/mo each | Medium |
+| Idle Site-to-Site VPN connections | ~$36/mo each | Medium |
+| **Abandoned VPCs** (no workload, no traffic, no recent CloudTrail activity) | sum of its NAT / LB / endpoints / IPs | Medium |
+| Unused security groups (hygiene, $0 — flags ones open to 0.0.0.0/0) | security, not cost | Medium |
+
+**Lookback.** Idle checks read CloudWatch history for 7 days by default; pick 14/30/60
+in the dashboard or pass `awsco scan --lookback-days 30`. Use 30+ before deleting
+anything — 7 days misses monthly jobs.
+
+**Every finding explains itself.** Expand a row for the recommendation, the risks,
+what to check before acting, and how to undo it (or a clear "not reversible").
 
 ### FinOps recommendations (v1.1+)
 
@@ -81,6 +95,16 @@ filter:
 | Reserved Instance recommendations | `commitment` | Cost Explorer | RI purchases that would discount steady EC2/RDS/ElastiCache/Redshift/OpenSearch usage |
 | Savings Plans recommendations | `commitment` | Cost Explorer | The hourly Compute/EC2 Savings Plan commitment that maximises discount |
 | Cost anomalies | `anomaly` | Cost Anomaly Detection | Unexpected spend spikes by service (one-off impact, tracked separately from savings) |
+| Cost Optimization Hub | all | Cost Optimization Hub | AWS's own aggregator: Graviton moves, Lambda/ECS/RDS/EBS rightsizing, idle resources, commitments |
+
+**Spend baseline.** Each scan also pulls 30-day spend by service, month-to-date
+and this month's forecast from Cost Explorer, so the dashboard shows what the
+bill would be after the fixes. (AWS bills $0.01 per Cost Explorer request.)
+
+**No double counting.** When two findings are alternatives, like stopping an idle
+instance versus rightsizing it, or a Compute Savings Plan versus EC2 RIs for the
+same usage, only the bigger one counts toward totals. The other is shown as an
+alternative.
 
 Notes:
 - These are **account-wide** (the Cost Explorer endpoint is global), so they run
@@ -104,6 +128,10 @@ The IAM policy lives in [`infra/iam-policy.json`](infra/iam-policy.json). It's r
 Attach it to an IAM user or role, then point `AWS_PROFILE` at it.
 
 ## Trust posture
+
+- **Account guard.** Enter the 12-digit account ID in the Connect dialog; every scan is refused if the keys belong to a different account.
+- **Key hygiene warnings.** Root keys and long-lived `AKIA…` keys get a warning; temporary `ASIA…` keys are recommended.
+- **Loopback only.** `awsco serve` binds `127.0.0.1` by default (Docker publishes on `127.0.0.1:3000`), and a Host-header allowlist blocks DNS-rebinding. Use `AWSCO_ALLOWED_HOSTS` to add hostnames.
 
 - **No outbound network calls** except to AWS API endpoints. Run with `--audit-mode` to log every network request.
 - **No telemetry.** Ever. Not even anonymized counters.

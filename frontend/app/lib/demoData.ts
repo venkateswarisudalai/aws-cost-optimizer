@@ -3,7 +3,12 @@
 // This mirrors backend/awsco/demo/fixtures.py so the deployed dashboard can
 // render the exact sample scan WITHOUT a backend — the hosted site is a
 // showcase, not a live tool. Real scans always run locally against the API.
-import type { Finding, RegionInfo, ScanResult } from "./types";
+import demoGuidance from "./demoGuidance.json";
+import type { Finding, Guidance, RegionInfo, ScanResult } from "./types";
+
+// Baked from the backend by scripts/gen-demo-guidance.py (the static demo has
+// no Python to compute it).
+const DEMO_GUIDANCE = demoGuidance as unknown as Record<string, Guidance>;
 
 const ACCOUNT = "123456789012";
 const arn = (service: string, region: string, id: string) =>
@@ -288,11 +293,33 @@ export const demoRegions: RegionInfo[] = [
   })),
 ].sort((a, b) => a.name.localeCompare(b.name));
 
+const DEMO_SPEND = {
+  period_start: "2026-05-02",
+  period_end: "2026-06-01",
+  total_30d_usd: 4812.37,
+  by_service: [
+    { service: "Amazon Elastic Compute Cloud - Compute", cost_usd: 1896.2 },
+    { service: "Amazon Relational Database Service", cost_usd: 902.14 },
+    { service: "EC2 - Other", cost_usd: 611.08 },
+    { service: "Amazon Simple Storage Service", cost_usd: 488.51 },
+    { service: "Amazon Virtual Private Cloud", cost_usd: 263.4 },
+    { service: "Amazon ElastiCache", cost_usd: 214.66 },
+    { service: "AmazonCloudWatch", cost_usd: 176.93 },
+    { service: "Elastic Load Balancing", cost_usd: 121.5 },
+    { service: "Other", cost_usd: 137.95 },
+  ],
+  month_to_date_usd: 4812.37,
+  forecast_month_usd: 4990,
+  currency: "USD",
+};
+
 /** The full demo scan, or a region-filtered slice (mirrors the server's
  *  demo-mode region filter so the dashboard's switcher behaves the same). */
 export function demoScan(regions?: string[] | null): ScanResult {
   const wanted = regions && regions.length ? new Set(regions) : null;
-  const findings = wanted ? FINDINGS.filter((f) => wanted.has(f.region)) : FINDINGS;
+  const findings = (wanted ? FINDINGS.filter((f) => wanted.has(f.region)) : FINDINGS).map(
+    (f) => ({ ...f, guidance: DEMO_GUIDANCE[`${f.check_id}|${f.resource_id}`] ?? null }),
+  );
   const scanned = wanted
     ? REGIONS_SCANNED.filter((r) => wanted.has(r))
     : REGIONS_SCANNED;
@@ -305,5 +332,6 @@ export function demoScan(regions?: string[] | null): ScanResult {
     findings,
     errors: [],
     is_demo: true,
+    spend: wanted ? null : DEMO_SPEND,
   };
 }

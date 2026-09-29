@@ -3,6 +3,7 @@
 import { MapPin } from "lucide-react";
 import { regionName } from "../lib/regions";
 import type { ScanResult } from "../lib/types";
+import { countedSavings } from "../lib/savings";
 
 function fmtMoney(n: number): string {
   return n.toLocaleString("en-US", {
@@ -29,7 +30,7 @@ export function SavingsByRegion({
   const totals = new Map<string, { savings: number; count: number }>();
   for (const f of scan.findings) {
     const cur = totals.get(f.region) ?? { savings: 0, count: 0 };
-    cur.savings += f.monthly_savings_usd;
+    cur.savings += countedSavings(f);
     cur.count += 1;
     totals.set(f.region, cur);
   }
