@@ -1,0 +1,395 @@
+{
+  "ce.anomaly|anomaly-0001": {
+    "before_you_act": [
+      "Open the anomaly in Cost Explorer and check the root causes it lists."
+    ],
+    "recommendation": "Investigate the spike in AmazonS3.",
+    "reversible": true,
+    "risk_level": "info",
+    "risks": [
+      "Nothing is changed. A real spike may mean a runaway job, a leaked key or a misconfiguration."
+    ],
+    "undo": "Not applicable."
+  },
+  "ce.ri-recommendation|ri-rds-db.r5.large": {
+    "before_you_act": [
+      "Confirm this usage will run steadily for the whole term (no planned migration or shutdown).",
+      "Apply rightsizing and cleanup first, so you don't reserve capacity you're about to remove."
+    ],
+    "recommendation": "Buy the recommended Reserved Instances (1-year, as priced here).",
+    "reversible": false,
+    "risk_level": "commitment",
+    "risks": [
+      "You pay for the full term even if you stop using the instances.",
+      "It only covers the exact instance family, region and engine it's bought for."
+    ],
+    "undo": "Can't be cancelled. Standard EC2 RIs can be listed on the RI Marketplace; RDS, ElastiCache and other RIs can't be resold."
+  },
+  "ce.savings-plan|COMPUTE_SP": {
+    "before_you_act": [
+      "Apply rightsizing and idle cleanup first; they lower the baseline you should commit to.",
+      "Commit to less than the recommendation if usage might fall."
+    ],
+    "recommendation": "Buy a Savings Plan committing $3.20/hour for 1 year.",
+    "reversible": false,
+    "risk_level": "commitment",
+    "risks": [
+      "You pay $3.20/hour for the whole term, even if usage drops.",
+      "Overlaps with Reserved Instances covering the same usage \u2014 don't buy both."
+    ],
+    "undo": "Generally can't be cancelled or resold. AWS allows returning a recent purchase within 7 days, with limits \u2014 check the current terms before buying."
+  },
+  "dynamodb.idle-provisioned|events-archive": {
+    "before_you_act": [
+      "Check for scheduled bulk jobs that hit the table rarely but hard."
+    ],
+    "recommendation": "Switch the table to on-demand (pay per request) billing.",
+    "reversible": true,
+    "risk_level": "safe",
+    "risks": [
+      "If traffic later grows steadily, on-demand can cost more than provisioned.",
+      "You can switch billing modes back only once every 24 hours."
+    ],
+    "undo": "`aws dynamodb update-table --region us-east-1 --table-name events-archive --billing-mode PROVISIONED --provisioned-throughput ReadCapacityUnits=200,WriteCapacityUnits=200`."
+  },
+  "ebs.gp2-to-gp3|vol-prod001": {
+    "before_you_act": [
+      "Nothing to stop or detach: the change is applied online."
+    ],
+    "recommendation": "Change the volume type to gp3 in place.",
+    "reversible": true,
+    "risk_level": "safe",
+    "risks": [
+      "The same volume can't be modified again for 6 hours afterwards.",
+      "gp3 starts at 125 MB/s of throughput; gp2 bursts up to 250 MB/s on large volumes."
+    ],
+    "undo": "`aws ec2 modify-volume --region us-east-1 --volume-id vol-prod001 --volume-type gp2` after the 6-hour cooldown."
+  },
+  "ebs.gp2-to-gp3|vol-prod002": {
+    "before_you_act": [
+      "Nothing to stop or detach: the change is applied online."
+    ],
+    "recommendation": "Change the volume type to gp3 in place.",
+    "reversible": true,
+    "risk_level": "safe",
+    "risks": [
+      "The same volume can't be modified again for 6 hours afterwards.",
+      "gp3 starts at 125 MB/s of throughput; gp2 bursts up to 250 MB/s on large volumes."
+    ],
+    "undo": "`aws ec2 modify-volume --region us-east-1 --volume-id vol-prod002 --volume-type gp2` after the 6-hour cooldown."
+  },
+  "ebs.snapshot-old|snap-deadbeef01": {
+    "before_you_act": [
+      "Check your retention policy (SOC 2 / legal hold) for this data.",
+      "Check it isn't the source of an AMI still in use (AWS blocks that delete)."
+    ],
+    "recommendation": "Delete the snapshot, or move it to the Archive tier (about 75% cheaper) if you must keep it: `aws ec2 modify-snapshot-tier --snapshot-id snap-deadbeef01 --storage-tier archive`.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Deletion is permanent \u2014 the restore point is gone.",
+      "Snapshots are incremental: the real saving can be smaller than the estimate if later snapshots share its blocks.",
+      "It may be needed for compliance or audit retention."
+    ],
+    "undo": "None once deleted. Archiving instead is reversible (`restore-snapshot-tier`, takes 24\u201372 hours)."
+  },
+  "ebs.unattached|vol-0abc1234": {
+    "before_you_act": [
+      "Check the volume's tags and name for an owner.",
+      "Snapshot it: `aws ec2 create-snapshot --region us-east-1 --volume-id vol-0abc1234 --description 'awsco backup before delete'`"
+    ],
+    "recommendation": "Delete the volume. If you might need the data, snapshot it first \u2014 a snapshot costs about half as much as the volume.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "All data on the volume is permanently deleted.",
+      "It may be a deliberately detached volume (e.g. a DR copy or one kept for a later re-attach)."
+    ],
+    "undo": "Only via a snapshot taken beforehand: `aws ec2 create-volume --snapshot-id <snap-id> --availability-zone <az>`. Without one, it's gone."
+  },
+  "ebs.unattached|vol-0def5678": {
+    "before_you_act": [
+      "Check the volume's tags and name for an owner.",
+      "Snapshot it: `aws ec2 create-snapshot --region us-west-2 --volume-id vol-0def5678 --description 'awsco backup before delete'`"
+    ],
+    "recommendation": "Delete the volume. If you might need the data, snapshot it first \u2014 a snapshot costs about half as much as the volume.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "All data on the volume is permanently deleted.",
+      "It may be a deliberately detached volume (e.g. a DR copy or one kept for a later re-attach)."
+    ],
+    "undo": "Only via a snapshot taken beforehand: `aws ec2 create-volume --snapshot-id <snap-id> --availability-zone <az>`. Without one, it's gone."
+  },
+  "ec2.idle|i-0idleanalytics01": {
+    "before_you_act": [
+      "Low CPU isn't proof of no use: check network traffic and who owns it (tags).",
+      "Check for batch jobs that only run monthly."
+    ],
+    "recommendation": "Stop the instance (EBS storage is still billed while stopped). If it stays unneeded, snapshot it as an AMI and terminate it.",
+    "reversible": true,
+    "risk_level": "restart",
+    "risks": [
+      "Whatever runs on it stops until someone starts it again.",
+      "Its public IP changes on restart, unless it has an Elastic IP.",
+      "Any instance-store (ephemeral) disk is wiped. EBS data is kept."
+    ],
+    "undo": "`aws ec2 start-instances --region us-east-1 --instance-ids i-0idleanalytics01`."
+  },
+  "ec2.rightsizing|i-0rightsize0001": {
+    "before_you_act": [
+      "Check peak (not average) CPU and memory, including month-end or seasonal peaks.",
+      "Confirm m5.large supports the same architecture (x86 vs ARM) and features.",
+      "Do it in a maintenance window, or behind a load balancer one instance at a time."
+    ],
+    "recommendation": "Resize from m5.2xlarge to m5.large.",
+    "reversible": true,
+    "risk_level": "restart",
+    "risks": [
+      "Needs a stop/start, which means a few minutes of downtime.",
+      "Its public IP changes, unless it has an Elastic IP.",
+      "A smaller type has less headroom for traffic spikes."
+    ],
+    "undo": "Stop the instance, set the type back to m5.2xlarge, and start it again."
+  },
+  "ec2.stopped-billed-ebs|i-0abcdef123456": {
+    "before_you_act": [
+      "Back it up: `aws ec2 create-image --region us-east-1 --instance-id i-0abcdef123456 --name awsco-backup-i-0abcdef123456` (the AMI's snapshots cost less than live volumes).",
+      "Check whether it was stopped on purpose, e.g. a standby box."
+    ],
+    "recommendation": "Create an AMI as a backup, then terminate the instance so its volumes stop billing.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Terminating deletes root volumes (and any set to DeleteOnTermination).",
+      "The instance ID, private IP and any instance-specific config are gone for good."
+    ],
+    "undo": "Launch a new instance from the AMI. The new one gets a different ID and IP."
+  },
+  "eip.unused|eipalloc-aaaa": {
+    "before_you_act": [
+      "Search your DNS (Route 53 and elsewhere) and allowlists for 52.12.34.56.",
+      "Ask whether it's reserved for a failover or a planned launch."
+    ],
+    "recommendation": "Release 52.12.34.56 if nothing depends on this exact IP.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Once released, you usually can't get the same IP back.",
+      "Partner firewall allowlists, DNS records or email SPF entries that name 52.12.34.56 will stop working."
+    ],
+    "undo": "Best effort only: `aws ec2 allocate-address --region us-east-1 --address 52.12.34.56` works only if no one else has been given the IP since."
+  },
+  "eip.unused|eipalloc-bbbb": {
+    "before_you_act": [
+      "Search your DNS (Route 53 and elsewhere) and allowlists for 52.78.90.12.",
+      "Ask whether it's reserved for a failover or a planned launch."
+    ],
+    "recommendation": "Release 52.78.90.12 if nothing depends on this exact IP.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Once released, you usually can't get the same IP back.",
+      "Partner firewall allowlists, DNS records or email SPF entries that name 52.78.90.12 will stop working."
+    ],
+    "undo": "Best effort only: `aws ec2 allocate-address --region eu-west-1 --address 52.78.90.12` works only if no one else has been given the IP since."
+  },
+  "elasticache.idle|sessions-cache": {
+    "before_you_act": [
+      "Confirm no app config references its endpoint.",
+      "For Redis/Valkey, add `--final-snapshot-identifier awsco-final` to the delete."
+    ],
+    "recommendation": "Delete the cluster, taking a final snapshot (Redis/Valkey).",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "All cached data is lost. Memcached has no snapshots at all.",
+      "Apps that expect the cache may slow down or error, rather than fall back.",
+      "The endpoint hostname changes if you recreate it."
+    ],
+    "undo": "Recreate from the final snapshot (Redis/Valkey) and update app config to the new endpoint."
+  },
+  "lb.unused|staging-old-alb": {
+    "before_you_act": [
+      "Search Route 53 and other DNS for records pointing at its DNS name.",
+      "Save its config: `aws elbv2 describe-listeners --load-balancer-arn arn:aws:elb:us-east-1:123456789012:demo/staging-old-alb` and `describe-rules`."
+    ],
+    "recommendation": "Delete the load balancer.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Its DNS name is gone for good; a recreated one gets a new name, so any CNAME or alias pointing at it breaks.",
+      "Its listener rules and TLS certificate bindings are lost."
+    ],
+    "undo": "Recreate it from the saved config and update DNS to the new name."
+  },
+  "logs.no-retention|/aws/ecs/legacy-cluster": {
+    "before_you_act": [
+      "Check what retention your policies require for this log group.",
+      "Archive old logs to S3 first if you need them: `aws logs create-export-task`."
+    ],
+    "recommendation": "Set a retention period (30 days in the fix command; choose what your compliance policy requires).",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Log events older than the retention period are permanently deleted, shortly after you apply it.",
+      "Audit or security logs may need a year or more (e.g. SOC 2, PCI)."
+    ],
+    "undo": "Retention can be raised or removed at any time, but already-deleted events can't be recovered."
+  },
+  "logs.no-retention|/aws/lambda/old-cron": {
+    "before_you_act": [
+      "Check what retention your policies require for this log group.",
+      "Archive old logs to S3 first if you need them: `aws logs create-export-task`."
+    ],
+    "recommendation": "Set a retention period (30 days in the fix command; choose what your compliance policy requires).",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Log events older than the retention period are permanently deleted, shortly after you apply it.",
+      "Audit or security logs may need a year or more (e.g. SOC 2, PCI)."
+    ],
+    "undo": "Retention can be raised or removed at any time, but already-deleted events can't be recovered."
+  },
+  "nat.idle|nat-0a1b2c3d4e5f6": {
+    "before_you_act": [
+      "Find route tables that point at it: `aws ec2 describe-route-tables --region us-east-1 --filters Name=route.nat-gateway-id,Values=nat-0a1b2c3d4e5f6`.",
+      "Keep its Elastic IP (don't release it) so a rebuild can reuse the address."
+    ],
+    "recommendation": "Delete the NAT gateway if no private subnet needs outbound internet. For AWS-only traffic (S3, DynamoDB) a free gateway endpoint does the job.",
+    "reversible": true,
+    "risk_level": "destructive",
+    "risks": [
+      "Anything in a private subnet routed through it loses internet access \u2014 package installs, external API calls and patching will fail.",
+      "Its public IP changes if you recreate it, which breaks partner allowlists."
+    ],
+    "undo": "Recreate with `aws ec2 create-nat-gateway` (reusing the kept Elastic IP) and point the route tables back at it. Expect an outage in between."
+  },
+  "nat.idle|nat-99887766": {
+    "before_you_act": [
+      "Find route tables that point at it: `aws ec2 describe-route-tables --region eu-west-1 --filters Name=route.nat-gateway-id,Values=nat-99887766`.",
+      "Keep its Elastic IP (don't release it) so a rebuild can reuse the address."
+    ],
+    "recommendation": "Delete the NAT gateway if no private subnet needs outbound internet. For AWS-only traffic (S3, DynamoDB) a free gateway endpoint does the job.",
+    "reversible": true,
+    "risk_level": "destructive",
+    "risks": [
+      "Anything in a private subnet routed through it loses internet access \u2014 package installs, external API calls and patching will fail.",
+      "Its public IP changes if you recreate it, which breaks partner allowlists."
+    ],
+    "undo": "Recreate with `aws ec2 create-nat-gateway` (reusing the kept Elastic IP) and point the route tables back at it. Expect an outage in between."
+  },
+  "opensearch.idle|logs-search-old": {
+    "before_you_act": [
+      "Register an S3 snapshot repository and take a manual snapshot.",
+      "Confirm no log shipper (Fluent Bit, Logstash) still sends to it."
+    ],
+    "recommendation": "Delete the domain after taking a manual snapshot to S3.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "All indices are permanently deleted. AWS's automated snapshots are deleted with the domain.",
+      "The endpoint changes if you recreate it."
+    ],
+    "undo": "Create a new domain and restore the manual snapshot from S3."
+  },
+  "rds.idle|prod-leftover-db": {
+    "before_you_act": [
+      "Confirm no app, cron job or BI tool still connects to it.",
+      "Take a snapshot: `aws rds create-db-snapshot --region us-east-1 --db-instance-identifier prod-leftover-db --db-snapshot-identifier awsco-prod-leftover-db`."
+    ],
+    "recommendation": "Stop the instance for now. If it's truly retired, take a final snapshot and delete it \u2014 AWS restarts a stopped RDS instance after 7 days.",
+    "reversible": true,
+    "risk_level": "restart",
+    "risks": [
+      "Apps with its connection string will fail while it's stopped.",
+      "AWS automatically starts a stopped instance again after 7 days, so the saving isn't permanent.",
+      "Storage and backups are still billed while it's stopped."
+    ],
+    "undo": "`aws rds start-db-instance --region us-east-1 --db-instance-identifier prod-leftover-db` (takes a few minutes)."
+  },
+  "rds.snapshot-old|prod-db-pre-migration": {
+    "before_you_act": [
+      "Check whether the source database (prod-db) still exists.",
+      "If unsure, export it to S3 (much cheaper, Parquet): `aws rds start-export-task`."
+    ],
+    "recommendation": "Delete the manual snapshot if it's past your retention requirement.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Permanent: it may be the only copy of a database that no longer exists.",
+      "It may be under a compliance or legal retention requirement."
+    ],
+    "undo": "None once deleted."
+  },
+  "redshift.idle|bi-warehouse": {
+    "before_you_act": [
+      "Check scheduled queries and ETL jobs that write to it."
+    ],
+    "recommendation": "Pause the cluster. Only storage is billed while it's paused.",
+    "reversible": true,
+    "risk_level": "restart",
+    "risks": [
+      "Queries and dashboards fail until it's resumed.",
+      "Scheduled loads (ETL) that write to it will fail while it's paused."
+    ],
+    "undo": "`aws redshift resume-cluster --region us-east-1 --cluster-identifier bi-warehouse` (takes a few minutes)."
+  },
+  "s3.incomplete-multipart-upload|data-lake-staging": {
+    "before_you_act": [
+      "Save the current rules first: `aws s3api get-bucket-lifecycle-configuration --bucket data-lake-staging` and add the abort rule to that JSON."
+    ],
+    "recommendation": "Add a lifecycle rule that aborts incomplete uploads after 7 days.",
+    "reversible": true,
+    "risk_level": "destructive",
+    "risks": [
+      "Couldn't read this bucket's lifecycle rules. put-bucket-lifecycle-configuration REPLACES the whole configuration, so merge the abort rule into the existing rules (the fix command does this) or expiry / tiering rules are wiped.",
+      "A genuinely slow, still-running upload older than 7 days would be aborted."
+    ],
+    "undo": "Re-apply the saved lifecycle JSON with `put-bucket-lifecycle-configuration`. Parts that were already aborted can't be recovered."
+  },
+  "sg.unused|sg-0bastion": {
+    "before_you_act": [
+      "Check launch templates: `aws ec2 describe-launch-template-versions --versions '$Latest' --launch-template-id <id>` (or search your IaC for sg-0bastion).",
+      "Save its rules: `aws ec2 describe-security-groups --group-ids sg-0bastion`."
+    ],
+    "recommendation": "Delete the security group. It saves $0 but removes attack surface.",
+    "reversible": true,
+    "risk_level": "safe",
+    "risks": [
+      "It allows inbound traffic from anywhere (tcp/22). Leaving it around risks someone attaching it to a new instance.",
+      "A launch template, Auto Scaling group or CloudFormation stack may reference it without any running interface using it yet. Their next launch would fail."
+    ],
+    "undo": "Recreate it from the saved rules. It gets a new group ID, so anything that named the old ID must be updated."
+  },
+  "vpc.abandoned|vpc-0staging": {
+    "before_you_act": [
+      "Check the VPC's tags and CloudFormation/Terraform state for an owner. If it's managed by IaC, tear it down there instead (`terraform destroy`, delete the stack).",
+      "Check Route 53 for records that point at its load balancers.",
+      "No flow logs are enabled, so traffic was judged from NAT, load balancer and endpoint metrics only. For certainty, turn on flow logs for a week first.",
+      "Run the teardown one step at a time, top to bottom, and wait for each step to finish."
+    ],
+    "recommendation": "Tear down the VPC's billable infrastructure (and then the VPC). If you're not sure, delete just the NAT gateways first \u2014 that's most of the cost and is easy to recreate.",
+    "reversible": false,
+    "risk_level": "destructive",
+    "risks": [
+      "Everything in the VPC is removed. Anything you missed stops working, and load balancer DNS names and NAT IPs can't be recovered.",
+      "It may be a disaster-recovery VPC that's quiet by design."
+    ],
+    "undo": "No single undo. Rebuild from infrastructure-as-code if it has any; otherwise each resource must be recreated by hand with new IDs, IPs and DNS names."
+  },
+  "vpc.endpoint-idle|vpce-0staging01": {
+    "before_you_act": [
+      "Check whether private subnets have a NAT or internet route to fall back on.",
+      "Confirm no endpoint policy is part of a compliance control (data-perimeter setups)."
+    ],
+    "recommendation": "Delete the interface endpoint.",
+    "reversible": true,
+    "risk_level": "restart",
+    "risks": [
+      "If anything in the VPC still calls com.amazonaws.us-east-1.ecr.dkr, it will either go out through the NAT/internet (costing data charges) or fail if there's no internet route.",
+      "Private DNS is on: the service's normal hostname resolves to this endpoint today, so removing it changes where that traffic goes."
+    ],
+    "undo": "Recreate it: `aws ec2 create-vpc-endpoint --vpc-endpoint-type Interface --vpc-id vpc-0staging --service-name com.amazonaws.us-east-1.ecr.dkr --subnet-ids ...`. It gets a new ID and DNS names."
+  }
+}

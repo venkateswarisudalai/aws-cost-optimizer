@@ -1,0 +1,2 @@
+recursive-include awsco/static *
+global-exclude __pycache__/* *.py[cod]

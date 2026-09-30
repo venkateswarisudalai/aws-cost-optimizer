@@ -6,18 +6,17 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import NAT_GATEWAY_MONTHLY
 
 CHECK_ID = "nat.idle"
-LOOKBACK_DAYS = 7
 IDLE_BYTES_THRESHOLD = 1_000_000  # 1 MB over 7d == effectively idle
 
 
 def _total_bytes(cw, nat_id: str) -> float:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace="AWS/NATGateway",
         MetricName="BytesOutToDestination",
@@ -58,7 +57,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                         title=f"Idle NAT gateway {nat_id}",
                         description=(
                             f"This NAT gateway has processed only {int(bytes_out):,} bytes "
-                            f"over the last {LOOKBACK_DAYS} days. AWS bills ~$32/mo per "
+                            f"over the last {lookback_days()} days. AWS bills ~$32/mo per "
                             "NAT gateway just for existing. If nothing uses it, delete it."
                         ),
                         service="ec2",

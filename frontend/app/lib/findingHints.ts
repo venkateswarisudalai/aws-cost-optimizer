@@ -11,6 +11,7 @@ import type { Finding } from "./types";
  */
 export function idleHint(f: Finding): string | null {
   const e = f.evidence ?? {};
+  const w = `${typeof e.lookback_days === "number" ? e.lookback_days : 7}d`;
 
   const num = (k: string): number | null =>
     typeof e[k] === "number" ? (e[k] as number) : null;
@@ -37,11 +38,11 @@ export function idleHint(f: Finding): string | null {
     }
     case "nat.idle": {
       const b = num("bytes_out_7d");
-      return b != null ? `${fmtBytes(b)} out · 7d` : "idle · 7d";
+      return b != null ? `${fmtBytes(b)} out · ${w}` : `idle · ${w}`;
     }
     case "rds.idle": {
       const c = num("max_connections_7d");
-      return c != null ? `${c} conn${c === 1 ? "" : "s"} · 7d` : "idle · 7d";
+      return c != null ? `${c} conn${c === 1 ? "" : "s"} · ${w}` : `idle · ${w}`;
     }
     case "lb.unused":
       return typeof e.reason === "string" ? (e.reason as string) : "no targets";
@@ -55,19 +56,19 @@ export function idleHint(f: Finding): string | null {
       return "gp2 → gp3";
     case "ec2.idle": {
       const c = num("max_cpu_pct_7d");
-      return c != null ? `${c}% CPU · 7d` : "idle · 7d";
+      return c != null ? `${c}% CPU · ${w}` : `idle · ${w}`;
     }
     case "elasticache.idle": {
       const c = num("max_cpu_pct_7d");
-      return c != null ? `${c}% CPU · 7d` : "idle · 7d";
+      return c != null ? `${c}% CPU · ${w}` : `idle · ${w}`;
     }
     case "redshift.idle": {
       const c = num("max_connections_7d");
-      return c != null ? `${c} conn${c === 1 ? "" : "s"} · 7d` : "idle · 7d";
+      return c != null ? `${c} conn${c === 1 ? "" : "s"} · ${w}` : `idle · ${w}`;
     }
     case "dynamodb.idle-provisioned": {
       const u = num("consumed_units_7d");
-      return u != null ? `${u} units · 7d` : "idle · 7d";
+      return u != null ? `${u} units · ${w}` : `idle · ${w}`;
     }
     case "rds.snapshot-old": {
       const d = num("age_days") ?? daysSince(e.create_time);

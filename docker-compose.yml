@@ -1,0 +1,33 @@
+# Dashboard at http://localhost:3000
+#
+#   AWS_PROFILE=vis docker compose up --build
+#
+# Your ~/.aws is mounted read-only: the container can read the profile but can
+# never write to, rotate, or overwrite your credentials.
+
+services:
+  awsco:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-cost-optimizer:local
+    ports:
+      - "127.0.0.1:3000:3000"  # loopback only: the UI accepts AWS keys
+    volumes:
+      # Read-only credential mount. :ro is load-bearing — do not drop it.
+      - ${HOME}/.aws:/home/awsco/.aws:ro
+      # Scan history survives container restarts.
+      - awsco-data:/data
+    environment:
+      # Which ~/.aws profile to scan with. Defaults to `default`.
+      AWS_PROFILE: ${AWS_PROFILE:-default}
+      AWSCO_DATA_DIR: /data
+    command:
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "3000"
+
+volumes:
+  awsco-data:

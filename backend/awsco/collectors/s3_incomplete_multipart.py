@@ -96,6 +96,19 @@ def _stale_upload_bytes(s3r, bucket: str, cutoff: datetime) -> tuple[float, int,
     return total_bytes, stale, truncated
 
 
+def _existing_lifecycle_rules(s3r, bucket: str) -> int | None:
+    """How many lifecycle rules the bucket already has (None = couldn't check).
+
+    put-bucket-lifecycle-configuration REPLACES the whole configuration, so the
+    one-line fix is only safe on a bucket with no rules yet."""
+    try:
+        return len(s3r.get_bucket_lifecycle_configuration(Bucket=bucket).get("Rules", []))
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchLifecycleConfiguration":
+            return 0
+        return None
+
+
 def collect(region: str, account_id: str, profile: str | None = None) -> list[Finding]:
     # list_buckets is global; us-east-1 endpoint is fine.
     s3 = client("s3", "us-east-1", profile)
@@ -135,6 +148,26 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
             continue
 
         arn = f"arn:aws:s3:::{bucket}"
+        existing_rules = _existing_lifecycle_rules(s3r, bucket)
+        abort_rule = (
+            '{"ID":"abort-incomplete-mpu","Status":"Enabled","Filter":{},'
+            '"AbortIncompleteMultipartUpload":{"DaysAfterInitiation":7}}'
+        )
+        if existing_rules == 0:
+            fix = (
+                f"aws s3api put-bucket-lifecycle-configuration --region {bregion} "
+                f"--bucket {bucket} --lifecycle-configuration '{{\"Rules\":[{abort_rule}]}}'  "
+                "# bucket has no lifecycle rules yet, so nothing is replaced"
+            )
+        else:
+            # Merge into the existing rules instead of overwriting them.
+            fix = (
+                f"aws s3api get-bucket-lifecycle-configuration --region {bregion} "
+                f"--bucket {bucket} > lifecycle.json\n"
+                f"# Add this rule to the Rules list in lifecycle.json: {abort_rule}\n"
+                f"aws s3api put-bucket-lifecycle-configuration --region {bregion} "
+                f"--bucket {bucket} --lifecycle-configuration file://lifecycle.json"
+            )
         sized_note = (
             f" (sized the first {MAX_UPLOADS_SIZED_PER_BUCKET}; real total is higher)"
             if truncated
@@ -162,15 +195,9 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 monthly_savings_usd=monthly,
                 severity=Severity.from_monthly_usd(monthly),
                 confidence=Confidence.HIGH,  # parts are unambiguously orphaned
-                cli_fix_command=(
-                    f"aws s3api put-bucket-lifecycle-configuration --region {bregion} "
-                    f"--bucket {bucket} --lifecycle-configuration "
-                    "'{\"Rules\":[{\"ID\":\"abort-incomplete-mpu\",\"Status\":\"Enabled\","
-                    "\"Filter\":{},\"AbortIncompleteMultipartUpload\":"
-                    "{\"DaysAfterInitiation\":7}}]}'  "
-                    "# adds a rule so AWS auto-aborts stale uploads (incl. existing ones)"
-                ),
-                fix_destructive=False,  # aborting orphaned parts loses no live data
+                cli_fix_command=fix,
+                # Overwriting existing rules would silently drop expiry/tiering.
+                fix_destructive=existing_rules != 0,
                 evidence={
                     "bucket": bucket,
                     "stale_upload_count": stale_count,
@@ -178,6 +205,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                     "orphaned_gb": round(stored_gb, 3),
                     "min_age_days": MIN_AGE_DAYS,
                     "truncated": truncated,
+                    "existing_lifecycle_rules": existing_rules,
                 },
             )
         )

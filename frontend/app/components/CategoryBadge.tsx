@@ -17,6 +17,10 @@ const meta: Record<Category, { label: string; cls: string }> = {
     label: "anomaly",
     cls: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
   },
+  hygiene: {
+    label: "hygiene",
+    cls: "bg-gray-500/15 text-gray-300 ring-gray-500/30",
+  },
 };
 
 export function CategoryBadge({ category }: { category?: Category }) {

@@ -12,12 +12,11 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import HOURS_PER_MONTH
 
 CHECK_ID = "ec2.idle"
-LOOKBACK_DAYS = 7
 CPU_IDLE_THRESHOLD_PCT = 5.0  # max CPU below this over 7d == idle
 
 # Conservative on-demand hourly prices for common instance types (USD, us-east-1).
@@ -42,7 +41,7 @@ DEFAULT_HOURLY = 0.05  # fall-back if type unknown (deliberately low)
 def _max_cpu(cw, instance_id: str) -> float | None:
     """Max CPUUtilization over the lookback window, or None if no datapoints."""
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace="AWS/EC2",
         MetricName="CPUUtilization",
@@ -103,7 +102,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                         )
                         description = (
                             f"Instance {inst_id} is running (fully billed) but peaked at "
-                            f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
+                            f"only {max_cpu:.1f}% CPU over the last {lookback_days()} days. "
                             f"It belongs to Auto Scaling group '{asg_name}', so don't stop "
                             "it directly (the ASG would replace it). Lower the group's "
                             "desired capacity or tune its scaling policy. Savings shown is "
@@ -117,7 +116,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                         )
                         description = (
                             f"Instance {inst_id} is running (fully billed) but peaked at "
-                            f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
+                            f"only {max_cpu:.1f}% CPU over the last {lookback_days()} days. "
                             "Stop it if unused, or rightsize to a smaller type. The "
                             "savings shown is the full instance cost; rightsizing "
                             "recovers part of it."
@@ -130,7 +129,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                             check_id=CHECK_ID,
                             title=(
                                 f"Idle EC2 '{name_tag}' ({inst_type}), "
-                                f"max {max_cpu:.1f}% CPU over {LOOKBACK_DAYS}d"
+                                f"max {max_cpu:.1f}% CPU over {lookback_days()}d"
                             ),
                             description=description,
                             service="ec2",

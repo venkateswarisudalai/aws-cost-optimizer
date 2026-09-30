@@ -1,6 +1,7 @@
 import { demoRegions, demoScan } from "./demoData";
 import type {
   AwsCredentials,
+  Confirmation,
   RegionInfo,
   ScanResult,
   ValidateResult,
@@ -49,12 +50,16 @@ export async function runScan(opts?: {
   profile?: string | null;
   regions?: string[] | null;
   credentials?: AwsCredentials | null;
+  expectedAccountId?: string | null;
+  lookbackDays?: number;
 }): Promise<ScanResult> {
   if (DEMO) return demoScan(opts?.regions ?? null);
   const body: Record<string, unknown> = {};
   if (opts?.profile) body.profile = opts.profile;
   if (opts?.regions?.length) body.regions = opts.regions;
   if (opts?.credentials) body.credentials = opts.credentials;
+  if (opts?.expectedAccountId) body.expected_account_id = opts.expectedAccountId;
+  if (opts?.lookbackDays) body.lookback_days = opts.lookbackDays;
   return request<ScanResult>("/scan", {
     method: "POST",
     body: JSON.stringify(body),
@@ -89,20 +94,101 @@ export async function listRegions(
 export async function validateConnection(input: {
   profile?: string | null;
   credentials?: AwsCredentials | null;
+  expectedAccountId?: string | null;
 }): Promise<ValidateResult> {
   if (DEMO) {
     return {
       account_id: "123456789012",
       arn: "arn:aws:iam::123456789012:user/demo",
       regions: demoRegions,
+      warnings: [],
       demo: true,
     };
   }
   const body: Record<string, unknown> = {};
   if (input.profile) body.profile = input.profile;
   if (input.credentials) body.credentials = input.credentials;
+  if (input.expectedAccountId) body.expected_account_id = input.expectedAccountId;
   return request<ValidateResult>("/aws/validate", {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// --- Slack owner confirmations ---------------------------------------------
+
+export interface AskOwnerResult {
+  sent: boolean;
+  simulated: boolean;
+  reason: string | null;
+  message: { text: string };
+}
+
+// The hosted demo has no backend; keep asks in memory so the flow still works.
+const demoAsks = new Map<string, Confirmation>();
+
+export async function askOwner(findingId: string): Promise<AskOwnerResult> {
+  if (DEMO) {
+    const f = demoScan().findings.find((x) => x.id === findingId);
+    demoAsks.set(findingId, {
+      finding_id: findingId,
+      resource_id: f?.resource_id ?? findingId,
+      owner_name: f?.owner?.name ?? null,
+      channel: "demo",
+      status: "pending",
+      responder: null,
+      note: null,
+      asked_at: new Date().toISOString(),
+      answered_at: null,
+    });
+    return {
+      sent: false,
+      simulated: true,
+      reason: "demo mode",
+      message: { text: `Is this still needed? ${f?.title ?? findingId}` },
+    };
+  }
+  return request<AskOwnerResult>(`/findings/${encodeURIComponent(findingId)}/ask-owner`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function listConfirmations(): Promise<Confirmation[]> {
+  if (DEMO) return Array.from(demoAsks.values());
+  return (await request<{ confirmations: Confirmation[] }>("/confirmations")).confirmations;
+}
+
+export async function syncConfirmations(): Promise<{
+  updated: number;
+  errors: string[];
+  confirmations: Confirmation[];
+}> {
+  if (DEMO) {
+    let updated = 0;
+    for (const c of demoAsks.values()) {
+      if (c.status === "pending") {
+        Object.assign(c, {
+          status: "delete_ok",
+          responder: "demo-teammate",
+          note: "(demo) Left over from the 2024 migration, fine to remove.",
+          answered_at: new Date().toISOString(),
+        });
+        updated++;
+      }
+    }
+    return { updated, errors: [], confirmations: Array.from(demoAsks.values()) };
+  }
+  return request("/confirmations/sync", { method: "POST", body: "{}" });
+}
+
+/** Whether Slack is set up. Slack is optional: without it the dashboard
+ *  still shows owners, and findings can be downloaded instead. */
+export async function slackStatus(): Promise<{ configured: boolean; demo: boolean }> {
+  if (DEMO) return { configured: false, demo: true };
+  try {
+    return await request("/slack/status");
+  } catch {
+    return { configured: false, demo: false };
+  }
 }

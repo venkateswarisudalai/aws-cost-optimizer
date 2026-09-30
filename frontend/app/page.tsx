@@ -10,6 +10,7 @@ import { Header } from "./components/Header";
 import { KpiCards } from "./components/KpiCards";
 import { RegionSwitcher } from "./components/RegionSwitcher";
 import { SavingsByRegion } from "./components/SavingsByRegion";
+import { SpendPanel } from "./components/SpendPanel";
 import { ScanningOverlay } from "./components/ScanningOverlay";
 import { WasteByService } from "./components/WasteByService";
 import { healthz, latestScan, listRegions, runScan } from "./lib/api";
@@ -97,6 +98,8 @@ export default function Dashboard() {
         profile: sel?.profile,
         regions,
         credentials: sel?.credentials,
+        expectedAccountId: sel?.expectedAccountId,
+        lookbackDays: sel?.lookbackDays,
       });
       setScan(result);
       // Note: we never reset `allRegions` from a scan — the switcher universe
@@ -145,6 +148,8 @@ export default function Dashboard() {
             regions: sel.regions,
             enabledRegions: sel.enabledRegions,
             accountId: sel.accountId,
+            expectedAccountId: sel.expectedAccountId,
+            lookbackDays: sel.lookbackDays,
           }),
         );
       } else {
@@ -221,6 +226,7 @@ export default function Dashboard() {
             {hasFindings ? (
               <>
                 <KpiCards scan={scan} selectedRegion={selectedRegion} />
+                {selectedRegion === "all" && <SpendPanel scan={scan} />}
                 <CrossVerifyNote />
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                   <div className="space-y-6 lg:col-span-1">

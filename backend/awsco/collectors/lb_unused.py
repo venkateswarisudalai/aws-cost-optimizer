@@ -6,17 +6,16 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import LB_MONTHLY
 
 CHECK_ID = "lb.unused"
-LOOKBACK_DAYS = 7
 
 
 def _request_count(cw, lb_dim_value: str, namespace: str, metric: str) -> float:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace=namespace,
         MetricName=metric,
@@ -88,7 +87,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 continue
             if req_count > 0:
                 continue
-            reason = f"0 requests over last {LOOKBACK_DAYS} days"
+            reason = f"0 requests over last {lookback_days()} days"
 
         findings.append(
             Finding(

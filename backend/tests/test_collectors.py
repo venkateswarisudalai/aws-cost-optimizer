@@ -45,6 +45,7 @@ def test_new_collectors_are_registered():
         "redshift.idle",
         "opensearch.idle",
         "s3.incomplete-multipart-upload",
+        "coh.recommendation",
     }:
         assert expected in registered
 
@@ -73,4 +74,5 @@ def test_global_collectors_are_account_wide_ce_checks():
         "ce.savings-plan",
         "ce.anomaly",
         "s3.incomplete-multipart-upload",
+        "coh.recommendation",
     }

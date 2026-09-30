@@ -48,6 +48,8 @@ class Category(str, Enum):
     RIGHTSIZING = "rightsizing"
     COMMITMENT = "commitment"
     ANOMALY = "anomaly"
+    # Security / tidiness, $0 savings (e.g. unused security groups).
+    HYGIENE = "hygiene"
 
 
 class Finding(BaseModel):
@@ -71,6 +73,24 @@ class Finding(BaseModel):
         description="True if applying the fix deletes data (e.g., snapshot, volume)"
     )
     evidence: dict[str, Any] = Field(default_factory=dict)
+    owner: dict[str, Any] | None = Field(
+        default=None,
+        description="Who owns it: source (tag | cloudtrail | unknown), name, email, "
+        "event_name, event_time (see awsco.ownership)",
+    )
+    guidance: dict[str, Any] | None = Field(
+        default=None,
+        description="recommendation / risk_level / risks / before_you_act / undo "
+        "(see awsco.guidance)",
+    )
+    superseded_by: str | None = Field(
+        default=None,
+        description=(
+            "id of a bigger-saving finding for the same resource (or the same "
+            "commitment pool). The two are alternatives, so only the primary is "
+            "counted in savings totals."
+        ),
+    )
     detected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
@@ -87,10 +107,15 @@ class ScanResult(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     errors: list[dict[str, str]] = Field(default_factory=list)
     is_demo: bool = False
+    # Cost Explorer spend baseline (see awsco.spend); None if unavailable.
+    spend: dict[str, Any] | None = None
+    # Days of CloudWatch history the idle checks used.
+    lookback_days: int = 7
 
     @property
     def total_monthly_savings_usd(self) -> float:
-        return sum(f.monthly_savings_usd for f in self.findings)
+        """Achievable savings: alternatives (superseded findings) aren't summed."""
+        return sum(f.monthly_savings_usd for f in self.findings if not f.superseded_by)
 
     @property
     def finding_count(self) -> int:
@@ -101,6 +126,8 @@ class ScanResult(BaseModel):
         """Monthly savings grouped by category (anomalies contribute $0)."""
         out: dict[str, float] = {}
         for f in self.findings:
+            if f.superseded_by:
+                continue
             out[f.category.value] = round(
                 out.get(f.category.value, 0.0) + f.monthly_savings_usd, 2
             )

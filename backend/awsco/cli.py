@@ -28,7 +28,9 @@ def main() -> None:
 
 
 @main.command()
-@click.option("--host", default="0.0.0.0", show_default=True)
+# Loopback only by default: the dashboard accepts AWS keys, so it must not be
+# reachable from the LAN. Docker passes --host 0.0.0.0 inside the container.
+@click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=3000, show_default=True, type=int)
 @click.option("--profile", default=None, help="AWS profile name (default: env / default)")
 @click.option(
@@ -61,14 +63,31 @@ def serve(host: str, port: int, profile: str | None, regions: tuple[str, ...], d
 @click.option("--region", "regions", multiple=True)
 @click.option("--demo-data", is_flag=True)
 @click.option("--json", "json_out", is_flag=True, help="Emit JSON instead of a table.")
-def scan(profile: str | None, regions: tuple[str, ...], demo_data: bool, json_out: bool):
+@click.option(
+    "--lookback-days",
+    default=7,
+    show_default=True,
+    type=click.IntRange(1, 60),
+    help="Days of CloudWatch history for idle checks. Use 30+ before deleting anything.",
+)
+def scan(
+    profile: str | None,
+    regions: tuple[str, ...],
+    demo_data: bool,
+    json_out: bool,
+    lookback_days: int,
+):
     """One-shot scan, print findings as a table (or JSON)."""
     logging.basicConfig(level=logging.WARNING)
     if demo_data:
         result = build_demo_scan()
     else:
         try:
-            result = run_scan(profile=profile, regions=list(regions) if regions else None)
+            result = run_scan(
+                profile=profile,
+                regions=list(regions) if regions else None,
+                lookback_days=lookback_days,
+            )
         except Exception as exc:  # noqa: BLE001
             console.print(f"[red]Scan failed:[/red] {exc}")
             sys.exit(1)

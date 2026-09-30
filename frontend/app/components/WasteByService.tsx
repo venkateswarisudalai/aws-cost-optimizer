@@ -3,6 +3,7 @@
 import { DonutChart } from "@tremor/react";
 import { PieChart } from "lucide-react";
 import type { ScanResult } from "../lib/types";
+import { countedSavings } from "../lib/savings";
 
 const SERVICE_LABELS: Record<string, string> = {
   ec2: "EC2 / EBS / EIP / NAT",
@@ -33,7 +34,7 @@ function fmtMoney(n: number): string {
 export function WasteByService({ scan }: { scan: ScanResult }) {
   const totals = new Map<string, number>();
   for (const f of scan.findings) {
-    totals.set(f.service, (totals.get(f.service) ?? 0) + f.monthly_savings_usd);
+    totals.set(f.service, (totals.get(f.service) ?? 0) + countedSavings(f));
   }
   const data = Array.from(totals.entries())
     .map(([service, savings]) => ({

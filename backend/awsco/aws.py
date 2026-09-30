@@ -37,6 +37,31 @@ _inline_credentials: contextvars.ContextVar[InlineCredentials | None] = (
 )
 
 
+# How many days of CloudWatch history the "idle" checks look at. 7 is quick but
+# misses monthly jobs; 30+ is the safer default for deletion decisions. Capped
+# at 60: hourly datapoints are kept for 63 days and one GetMetricStatistics
+# call returns at most 1,440 datapoints (60 days x 24 hours).
+DEFAULT_LOOKBACK_DAYS = 7
+MAX_LOOKBACK_DAYS = 60
+
+_lookback_days: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "awsco_lookback_days", default=DEFAULT_LOOKBACK_DAYS
+)
+
+
+def lookback_days() -> int:
+    return _lookback_days.get()
+
+
+def set_lookback_days(days: int):
+    """Set the ambient lookback for this scan. Returns a token for reset()."""
+    return _lookback_days.set(max(1, min(int(days), MAX_LOOKBACK_DAYS)))
+
+
+def reset_lookback_days(token) -> None:
+    _lookback_days.reset(token)
+
+
 def set_inline_credentials(creds: InlineCredentials | None):
     """Set ambient inline credentials. Returns a token for reset()."""
     return _inline_credentials.set(creds)

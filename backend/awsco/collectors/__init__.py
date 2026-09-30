@@ -13,7 +13,9 @@ from awsco.collectors import (
     ce_savings_plans,
     cloudwatch_logs_no_retention,
     compute_optimizer_rightsizing,
+    cost_optimization_hub,
     dynamodb_idle,
+    ebs_io1_to_gp3,
     ebs_gp2_to_gp3,
     ebs_snapshots_old,
     ebs_unattached,
@@ -28,6 +30,12 @@ from awsco.collectors import (
     rds_snapshots_old,
     redshift_idle,
     s3_incomplete_multipart,
+    secretsmanager_unused,
+    sg_unused,
+    tgw_attachment_idle,
+    vpc_abandoned,
+    vpc_endpoint_idle,
+    vpn_idle,
 )
 
 ALL_COLLECTORS = [
@@ -47,9 +55,19 @@ ALL_COLLECTORS = [
     redshift_idle,
     opensearch_idle,
     s3_incomplete_multipart,
+    ebs_io1_to_gp3,
+    secretsmanager_unused,
+    # Networking: leftover VPC plumbing, whole abandoned VPCs, unused SGs
+    vpc_endpoint_idle,
+    tgw_attachment_idle,
+    vpn_idle,
+    vpc_abandoned,
+    sg_unused,
     # FinOps recommendations (rightsizing / commitments / anomalies)
     compute_optimizer_rightsizing,
     ce_ri_recommendations,
     ce_savings_plans,
     ce_anomalies,
+    # AWS's own cross-service aggregator; overlaps are resolved in the scanner.
+    cost_optimization_hub,
 ]

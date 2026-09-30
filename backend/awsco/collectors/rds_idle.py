@@ -6,12 +6,11 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from awsco.aws import client
+from awsco.aws import client, lookback_days
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import HOURS_PER_MONTH
 
 CHECK_ID = "rds.idle"
-LOOKBACK_DAYS = 7
 
 # Conservative on-demand hourly prices for common instance classes (USD, us-east-1).
 # Underestimating savings is fine.
@@ -34,7 +33,7 @@ DEFAULT_HOURLY = 0.05  # fall-back if class unknown
 
 def _max_connections(cw, db_id: str) -> float:
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=LOOKBACK_DAYS)
+    start = end - timedelta(days=lookback_days())
     resp = cw.get_metric_statistics(
         Namespace="AWS/RDS",
         MetricName="DatabaseConnections",
@@ -96,7 +95,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                         title=f"Idle RDS instance {db_id} ({instance_class})",
                         description=(
                             f"RDS instance {db_id} had zero database connections "
-                            f"over the last {LOOKBACK_DAYS} days. Snapshot and delete, "
+                            f"over the last {lookback_days()} days. Snapshot and delete, "
                             "or stop the instance (RDS stop pauses billing for 7 days)."
                         ),
                         service="rds",
