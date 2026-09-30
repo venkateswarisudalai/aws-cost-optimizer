@@ -18,10 +18,12 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 
 from awsco.aws import client, lookback_days
+from awsco.aws import client
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import HOURS_PER_MONTH
 
 CHECK_ID = "opensearch.idle"
+LOOKBACK_DAYS = 7
 # Total search + indexing operations below this over the window == idle.
 ACTIVITY_THRESHOLD = 1.0
 
@@ -42,6 +44,7 @@ DEFAULT_HOURLY = 0.10
 def _sum_metric(cw, domain: str, account_id: str, metric: str) -> float:
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=lookback_days())
+    start = end - timedelta(days=LOOKBACK_DAYS)
     resp = cw.get_metric_statistics(
         Namespace="AWS/ES",
         MetricName=metric,
@@ -124,6 +127,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 description=(
                     f"Domain '{name}' served effectively no searches or indexing over the "
                     f"last {lookback_days()} days. If nothing depends on it, delete it (take a "
+                    f"last {LOOKBACK_DAYS} days. If nothing depends on it, delete it (take a "
                     "manual snapshot first); otherwise downsize the node type or count."
                 ),
                 service="es",

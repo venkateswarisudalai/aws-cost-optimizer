@@ -103,6 +103,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                         description = (
                             f"Instance {inst_id} is running (fully billed) but peaked at "
                             f"only {max_cpu:.1f}% CPU over the last {lookback_days()} days. "
+                            f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
                             f"It belongs to Auto Scaling group '{asg_name}', so don't stop "
                             "it directly (the ASG would replace it). Lower the group's "
                             "desired capacity or tune its scaling policy. Savings shown is "
@@ -117,6 +118,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                         description = (
                             f"Instance {inst_id} is running (fully billed) but peaked at "
                             f"only {max_cpu:.1f}% CPU over the last {lookback_days()} days. "
+                            f"only {max_cpu:.1f}% CPU over the last {LOOKBACK_DAYS} days. "
                             "Stop it if unused, or rightsize to a smaller type. The "
                             "savings shown is the full instance cost; rightsizing "
                             "recovers part of it."
@@ -130,6 +132,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                             title=(
                                 f"Idle EC2 '{name_tag}' ({inst_type}), "
                                 f"max {max_cpu:.1f}% CPU over {lookback_days()}d"
+                                f"max {max_cpu:.1f}% CPU over {LOOKBACK_DAYS}d"
                             ),
                             description=description,
                             service="ec2",

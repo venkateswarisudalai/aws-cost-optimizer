@@ -30,12 +30,6 @@ from awsco.collectors import (
     rds_snapshots_old,
     redshift_idle,
     s3_incomplete_multipart,
-    secretsmanager_unused,
-    sg_unused,
-    tgw_attachment_idle,
-    vpc_abandoned,
-    vpc_endpoint_idle,
-    vpn_idle,
 )
 
 ALL_COLLECTORS = [
