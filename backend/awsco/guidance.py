@@ -144,8 +144,24 @@ def _ec2_idle(f: Finding) -> Guidance:
         "Any instance-store (ephemeral) disk is wiped. EBS data is kept.",
     ]
     if asg:
-        risks.insert(0, f"It belongs to Auto Scaling group '{asg}', which will just launch a "
-                     "replacement — lower the group's desired capacity instead.")
+        return Guidance(
+            recommendation=f"Lower the desired (and minimum) capacity of Auto Scaling group "
+            f"'{asg}' by one. Stopping this instance only makes the group launch a replacement.",
+            risk_level=RiskLevel.RESTART,
+            risks=[
+                "The group runs with one fewer instance, so less headroom for traffic spikes.",
+                "The group chooses which instance to terminate (per its termination policy); "
+                "it's replaced from the launch template if you scale back up.",
+            ],
+            before_you_act=[
+                "Check the group's scaling policies: a target-tracking policy may scale "
+                "straight back out.",
+                "Look at peak load across the group, not just this instance.",
+            ],
+            undo=f"`aws autoscaling set-desired-capacity --region {f.region} "
+            f"--auto-scaling-group-name {asg} --desired-capacity <previous>`.",
+            reversible=True,
+        )
     return Guidance(
         recommendation="Stop the instance (EBS storage is still billed while stopped). If "
         "it stays unneeded, snapshot it as an AMI and terminate it.",
@@ -374,14 +390,20 @@ def _opensearch_idle(f: Finding) -> Guidance:
 
 def _s3_multipart(f: Finding) -> Guidance:
     bucket = _ev(f, "bucket", f.resource_id)
+    existing = _ev(f, "existing_lifecycle_rules")
+    risks = ["A genuinely slow, still-running upload older than 7 days would be aborted."]
+    if existing != 0:
+        risks.insert(0, (
+            f"This bucket already has {existing} lifecycle rule(s). "
+            if existing else "Couldn't read this bucket's lifecycle rules. "
+        ) + "put-bucket-lifecycle-configuration REPLACES the whole configuration, so "
+            "merge the abort rule into the existing rules (the fix command does this) "
+            "or expiry / tiering rules are wiped.")
     return Guidance(
         recommendation="Add a lifecycle rule that aborts incomplete uploads after 7 days.",
-        risk_level=RiskLevel.SAFE,
-        risks=[
-            "This command REPLACES the bucket's whole lifecycle configuration. Any "
-            "existing rules (expiry, tiering) are wiped unless you merge them in.",
-            "A genuinely slow, still-running upload older than 7 days would be aborted.",
-        ],
+        # Safe only when there are no rules to overwrite.
+        risk_level=RiskLevel.SAFE if existing == 0 else RiskLevel.DESTRUCTIVE,
+        risks=risks,
         before_you_act=[
             "Save the current rules first: `aws s3api get-bucket-lifecycle-configuration "
             f"--bucket {bucket}` and add the abort rule to that JSON.",

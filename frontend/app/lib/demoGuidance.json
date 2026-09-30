@@ -341,9 +341,9 @@
     ],
     "recommendation": "Add a lifecycle rule that aborts incomplete uploads after 7 days.",
     "reversible": true,
-    "risk_level": "safe",
+    "risk_level": "destructive",
     "risks": [
-      "This command REPLACES the bucket's whole lifecycle configuration. Any existing rules (expiry, tiering) are wiped unless you merge them in.",
+      "Couldn't read this bucket's lifecycle rules. put-bucket-lifecycle-configuration REPLACES the whole configuration, so merge the abort rule into the existing rules (the fix command does this) or expiry / tiering rules are wiped.",
       "A genuinely slow, still-running upload older than 7 days would be aborted."
     ],
     "undo": "Re-apply the saved lifecycle JSON with `put-bucket-lifecycle-configuration`. Parts that were already aborted can't be recovered."

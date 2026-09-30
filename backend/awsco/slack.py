@@ -109,16 +109,24 @@ def slack_user_for(owner: dict[str, Any] | None) -> str | None:
 # --- the message ------------------------------------------------------------------
 
 
+def _esc(value: Any) -> str:
+    """Slack's required escaping for untrusted text: tags, names and titles
+    come from AWS, and a tag value of `<!channel>` must not ping everyone."""
+    return (str(value or "")
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
 def _owner_line(owner: dict[str, Any] | None, user_id: str | None) -> str:
     if not owner or owner.get("source") == "unknown":
         return "*Owner:* unknown — no owner tag and no recent CloudTrail history. Who owns this?"
-    who = f"<@{user_id}>" if user_id else f"*{owner.get('name')}*"
+    who = f"<@{user_id}>" if user_id else f"*{_esc(owner.get('name'))}*"
     if owner.get("source") == "tag":
-        return f"*Owner:* {who} (from the `{owner.get('tag_key')}` tag)"
-    when = (owner.get("event_time") or "")[:10]
+        return f"*Owner:* {who} (from the `{_esc(owner.get('tag_key'))}` tag)"
+    when = _esc((owner.get("event_time") or "")[:10])
     return (
-        f"*Owner:* {who} — CloudTrail shows they {owner.get('relationship', 'created')} it"
-        f" ({owner.get('event_name')}{', ' + when if when else ''})"
+        f"*Owner:* {who} — CloudTrail shows they "
+        f"{_esc(owner.get('relationship', 'created'))} it"
+        f" ({_esc(owner.get('event_name'))}{', ' + when if when else ''})"
     )
 
 
@@ -127,23 +135,24 @@ def build_message(f: Finding, user_id: str | None) -> dict[str, Any]:
     cost = f"${f.monthly_savings_usd:,.2f}/mo" if f.monthly_savings_usd else "no direct cost"
     risk = (g.get("risks") or [""])[0]
     ask = f"<@{user_id}>, is this still needed?" if user_id else "Is this still needed?"
-    text = f"{ask} {f.title} ({f.region}, {cost})"
+    title, region = _esc(f.title), _esc(f.region)
+    text = f"{ask} {title} ({region}, {cost})"
     blocks = [
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"*{ask}*\n{f.title}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*{ask}*\n{title}"}},
         {"type": "section", "fields": [
-            {"type": "mrkdwn", "text": f"*Resource*\n`{f.resource_id}`"},
-            {"type": "mrkdwn", "text": f"*Region*\n{f.region}"},
+            {"type": "mrkdwn", "text": f"*Resource*\n`{_esc(f.resource_id)}`"},
+            {"type": "mrkdwn", "text": f"*Region*\n{region}"},
             {"type": "mrkdwn", "text": f"*Cost*\n{cost}"},
-            {"type": "mrkdwn", "text": f"*Suggested*\n{g.get('recommendation', f.title)}"},
+            {"type": "mrkdwn", "text": f"*Suggested*\n{_esc(g.get('recommendation', f.title))}"},
         ]},
         {"type": "section", "text": {"type": "mrkdwn", "text": _owner_line(f.owner, user_id)}},
     ]
     if f.description:
         blocks.append({"type": "context", "elements": [
-            {"type": "mrkdwn", "text": f"Why it was flagged: {f.description}"}]})
+            {"type": "mrkdwn", "text": f"Why it was flagged: {_esc(f.description)}"}]})
     if risk:
         blocks.append({"type": "context", "elements": [
-            {"type": "mrkdwn", "text": f":warning: If removed: {risk}"}]})
+            {"type": "mrkdwn", "text": f":warning: If removed: {_esc(risk)}"}]})
     blocks += [
         {"type": "section", "text": {"type": "mrkdwn", "text": (
             f"React :{KEEP}: to *keep it*, or :{DELETE_OK}: if it's *OK to delete*. "

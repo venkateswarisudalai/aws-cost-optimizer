@@ -157,7 +157,9 @@ def _allowed_hosts() -> list[str]:
     """Host headers the server answers to. Blocks DNS-rebinding: a malicious web
     page can't point its own hostname at 127.0.0.1 and drive this API (which
     can use your local AWS profiles). Extend via AWSCO_ALLOWED_HOSTS."""
-    hosts = ["localhost", "127.0.0.1", "[::1]", "testserver"]
+    # IPv4 loopback only: `awsco serve` binds 127.0.0.1, so IPv6 ([::1])
+    # clients can't reach it anyway (and Starlette can't match bracketed hosts).
+    hosts = ["localhost", "127.0.0.1", "testserver"]
     extra = os.environ.get("AWSCO_ALLOWED_HOSTS")
     if extra:
         hosts += [h.strip() for h in extra.split(",") if h.strip()]
@@ -329,6 +331,12 @@ def create_app() -> FastAPI:
         errors: list[str] = []
         for row in list_confirmations():
             if row["status"] != "pending":
+                continue
+            is_demo_row = row["channel"] == "demo"
+            if AppState.demo_mode != is_demo_row:
+                # Demo mode must never write fake answers over real asks that
+                # share this DB (the SOC 2 audit trail), and real sync skips
+                # rehearsal rows.
                 continue
             if AppState.demo_mode:
                 # Sample answer so the flow can be rehearsed end to end.

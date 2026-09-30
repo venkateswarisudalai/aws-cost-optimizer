@@ -43,41 +43,74 @@ class AccountMismatchError(ValueError):
     """The credentials belong to a different account than the user expected."""
 
 
-# Commitments that draw on the same pool of usage are alternatives: a Compute
-# Savings Plan, an EC2 Instance Savings Plan and EC2 RIs all discount the same
-# EC2 hours, so buying all three doesn't triple the saving.
-_COMPUTE_POOL = {"compute", "ec2", "lambda", "ecs", "fargate"}
+def _is_savings_plan(f: Finding) -> bool:
+    return f.check_id == "ce.savings-plan" or (
+        f.check_id == "coh.recommendation"
+        and (f.evidence or {}).get("action_type") == "PurchaseSavingsPlans"
+    )
 
 
-def _overlap_key(f: Finding) -> str:
-    if f.category == Category.COMMITMENT:
-        pool = "compute" if f.service in _COMPUTE_POOL else f.service
-        return f"commitment:{pool}"
-    if f.category == Category.ANOMALY:
-        return f"anomaly:{f.id}"  # never overlaps
-    return f"resource:{f.resource_id}"
+def _is_ec2_ri(f: Finding) -> bool:
+    return f.category == Category.COMMITMENT and f.service == "ec2" and not _is_savings_plan(f)
+
+
+def _by_savings(f: Finding):
+    # Biggest saving first; ties go to our own checks (concrete fix command)
+    # over Cost Optimization Hub.
+    return (-f.monthly_savings_usd, f.check_id == "coh.recommendation")
+
+
+def _mark_alternatives(group: list[Finding]) -> None:
+    group.sort(key=_by_savings)
+    for other in group[1:]:
+        other.superseded_by = group[0].id
 
 
 def mark_overlaps(findings: list[Finding]) -> list[Finding]:
     """Flag findings that are alternatives to a bigger one, so totals are real.
 
-    E.g. an idle instance may also be flagged for rightsizing; stopping it
-    saves the full cost, resizing saves the delta — you do one, not both. The
-    biggest saving in each group is primary; ties go to our own collectors
-    (they carry a concrete fix command) over Cost Optimization Hub.
+    - Same resource (same region + id), e.g. an idle instance also flagged for
+      rightsizing: stopping saves the full cost, resizing the delta — you do
+      one, not both. Names are only unique per region, so region is part of
+      the key: a table called 'users' in two regions is two resources.
+    - Savings Plans: Compute SP and EC2 Instance SP recommendations are
+      alternative ways to cover the same usage; only the biggest counts.
+    - EC2 Reserved Instances vs Savings Plans: both discount the same EC2
+      hours. Separate RI recommendations (different instance types / regions)
+      add up, so the RI *total* is compared with the best Savings Plan and the
+      smaller side is marked as the alternative.
+    - Other RIs (RDS, ElastiCache, ...) are independent purchases and add up.
     """
-    groups: dict[str, list[Finding]] = {}
+    by_resource: dict[str, list[Finding]] = {}
+    plans: list[Finding] = []
+    ec2_ris: list[Finding] = []
     for f in findings:
-        groups.setdefault(_overlap_key(f), []).append(f)
-    for group in groups.values():
-        if len(group) < 2:
+        if f.category == Category.COMMITMENT:
+            if _is_savings_plan(f):
+                plans.append(f)
+            elif _is_ec2_ri(f):
+                ec2_ris.append(f)
             continue
-        group.sort(
-            key=lambda f: (-f.monthly_savings_usd, f.check_id == "coh.recommendation")
-        )
-        primary = group[0]
-        for other in group[1:]:
-            other.superseded_by = primary.id
+        if f.category == Category.ANOMALY:
+            continue  # one-off impacts, never alternatives
+        by_resource.setdefault(f"{f.region}|{f.resource_id}", []).append(f)
+
+    for group in by_resource.values():
+        if len(group) > 1:
+            _mark_alternatives(group)
+
+    if len(plans) > 1:
+        _mark_alternatives(plans)
+    best_plan = min(plans, key=_by_savings) if plans else None
+    ri_total = sum(f.monthly_savings_usd for f in ec2_ris)
+    if best_plan and ec2_ris:
+        if best_plan.monthly_savings_usd >= ri_total:
+            for ri in ec2_ris:
+                ri.superseded_by = best_plan.id
+        else:
+            top_ri = min(ec2_ris, key=_by_savings)
+            for plan in plans:
+                plan.superseded_by = top_ri.id
     return findings
 
 
@@ -88,7 +121,10 @@ def roll_up_vpcs(findings: list[Finding]) -> list[Finding]:
     for vpc in (f for f in findings if f.check_id == "vpc.abandoned"):
         members = set(vpc.evidence.get("member_resource_ids", []))
         for f in findings:
-            if f is not vpc and (f.resource_id in members or f.resource_arn in members):
+            # Load balancer names repeat across regions: only this VPC's region.
+            if f is vpc or f.region != vpc.region:
+                continue
+            if f.resource_id in members or f.resource_arn in members:
                 f.superseded_by = vpc.id
     return findings
 
@@ -161,10 +197,21 @@ def run_scan(
                 if err:
                     errors.append(err)
 
-        spend = spend_summary(profile=profile)
+        # Extras run after every collector has finished; a network error here
+        # must cost only the extra, never the findings already collected.
+        try:
+            spend = spend_summary(profile=profile)
+        except Exception as exc:  # noqa: BLE001 — optional enrichment
+            log.warning("Spend baseline failed: %s", exc)
+            spend = None
+            errors.append({"collector": "spend", "region": "us-east-1", "error": str(exc)})
         if resolve_owners:
             # Tags first, then CloudTrail (capped, paced): who to ask on Slack.
-            ownership.resolve_owners(findings, profile=profile)
+            try:
+                ownership.resolve_owners(findings, profile=profile)
+            except Exception as exc:  # noqa: BLE001 — optional enrichment
+                log.warning("Owner lookup failed: %s", exc)
+                errors.append({"collector": "ownership", "region": "-", "error": str(exc)})
     finally:
         if token is not None:
             aws.reset_inline_credentials(token)

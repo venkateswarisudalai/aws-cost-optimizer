@@ -28,7 +28,8 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 
 from awsco.aws import client, lookback_days
-from awsco.metrics import matching_metrics, metric_total
+from awsco.collectors.vpc_endpoint_idle import _bytes_processed as endpoint_bytes_processed
+from awsco.metrics import metric_total
 from awsco.models import Confidence, Finding, Severity
 from awsco.pricing import (
     LB_MONTHLY,
@@ -135,6 +136,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
             # 3. Inventory the billable pieces.
             members: list[dict] = []
             traffic = 0.0
+            serving = False
 
             nats = ec2.describe_nat_gateways(
                 Filters=vpc_filter + [{"Name": "state", "Values": ["available"]}]
@@ -153,8 +155,10 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                                 "id": lb["LoadBalancerName"], "arn": lb["LoadBalancerArn"],
                                 "monthly_usd": LB_MONTHLY})
                 lb_value = _lb_traffic(cw, lb, days)
-                # RequestCount is requests, not bytes: any real request counts as use.
-                traffic += lb_value * (TRAFFIC_THRESHOLD_BYTES if lb.get("Type") == "application" else 1)
+                if lb.get("Type", "application") == "application" and lb_value > 0:
+                    serving = True  # RequestCount: any real request is use
+                else:
+                    traffic += lb_value
 
             endpoints = ec2.describe_vpc_endpoints(
                 Filters=vpc_filter + [{"Name": "vpc-endpoint-type", "Values": ["Interface"]}]
@@ -166,11 +170,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 members.append({"type": "interface-endpoint", "id": ep["VpcEndpointId"],
                                 "service": ep.get("ServiceName"),
                                 "monthly_usd": round(VPC_INTERFACE_ENDPOINT_AZ_MONTHLY * azs, 2)})
-                for dims in matching_metrics(cw, "AWS/PrivateLinkEndpoints", "BytesProcessed",
-                                             "VPC Endpoint Id", ep["VpcEndpointId"]):
-                    if not any(d["Name"] == "Subnet Id" for d in dims):
-                        traffic += metric_total(cw, "AWS/PrivateLinkEndpoints",
-                                                "BytesProcessed", dims, days)[0]
+                traffic += endpoint_bytes_processed(cw, ep["VpcEndpointId"], days)[0]
 
             tgw_atts = ec2.describe_transit_gateway_vpc_attachments(
                 Filters=vpc_filter + [{"Name": "state", "Values": ["available"]}]
@@ -190,7 +190,7 @@ def collect(region: str, account_id: str, profile: str | None = None) -> list[Fi
                 continue  # nothing billable: keeping the VPC costs nothing
 
             # 4. Any real traffic through its infrastructure means it's in use.
-            if traffic > TRAFFIC_THRESHOLD_BYTES:
+            if serving or traffic > TRAFFIC_THRESHOLD_BYTES:
                 continue
 
             # 5. Recent API activity means someone is working on it.

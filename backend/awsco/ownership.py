@@ -164,7 +164,11 @@ def resolve_owners(findings: list[Finding], profile: str | None = None) -> None:
             time.sleep(wait)
         last_call[f.region] = time.monotonic()
         lookups += 1
-        found = owner_from_cloudtrail(f.resource_id, f.region, profile)
+        try:
+            found = owner_from_cloudtrail(f.resource_id, f.region, profile)
+        except Exception as exc:  # noqa: BLE001 — network errors, not just ClientError
+            log.info("CloudTrail lookup for %s failed: %s", f.resource_id, exc)
+            found = None
         f.owner = found or {
             "source": "unknown",
             "note": "no owner tag, and no CloudTrail activity in the last 90 days",

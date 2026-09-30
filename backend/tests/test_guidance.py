@@ -43,9 +43,11 @@ def test_large_gp2_volume_warns_about_iops_drop():
     assert g.risk_level == RiskLevel.SAFE
 
 
-def test_idle_instance_in_asg_warns_about_replacement():
+def test_idle_instance_in_asg_recommends_scaling_in_not_stopping():
     g = guidance_for(_f("ec2.idle", {"auto_scaling_group": "web-asg"}))
-    assert "web-asg" in g.risks[0]
+    assert "web-asg" in g.recommendation and "desired" in g.recommendation
+    assert "Stop the instance" not in g.recommendation
+    assert "set-desired-capacity" in g.undo and "start-instances" not in g.undo
 
 
 def test_coh_graviton_flags_arm_compatibility():

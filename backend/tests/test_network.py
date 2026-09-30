@@ -152,3 +152,23 @@ def test_scan_records_lookback_on_findings():
          mock.patch.object(scanner, "spend_summary", return_value=None):
         result = scanner.run_scan(regions=["us-east-1"], lookback_days=30)
     assert result.lookback_days == 30
+
+
+# Review fix #7: a single ALB request means the VPC is in use.
+def test_vpc_with_one_alb_request_is_not_abandoned():
+    alb = {"LoadBalancerArn": "arn:aws:elasticloadbalancing:us-east-1:1:loadbalancer/app/api/abc",
+           "LoadBalancerName": "api", "Type": "application", "VpcId": "vpc-1"}
+    elbv2 = mock.MagicMock()
+    elbv2.get_paginator.return_value.paginate.return_value = [{"LoadBalancers": [alb]}]
+    cw = mock.MagicMock()
+
+    def stats(**kw):
+        return {"Datapoints": [{"Sum": 1.0}] if kw["MetricName"] == "RequestCount" else []}
+
+    cw.get_metric_statistics.side_effect = stats
+    cw.get_paginator.return_value.paginate.return_value = [{"Metrics": []}]
+    ct = mock.MagicMock()
+    ct.lookup_events.return_value = {"Events": []}
+    clients = {"ec2": _vpc_ec2([NAT_ENI]), "elbv2": elbv2, "cloudwatch": cw, "cloudtrail": ct}
+    with mock.patch.object(vpc_abandoned, "client", _clients(clients)):
+        assert vpc_abandoned.collect("us-east-1", "1") == []
